@@ -1,0 +1,15 @@
+[Unit]
+Description=Confluent Kafka server (broker)
+Documentation=http://docs.confluent.io
+Requires=network.target remote-fs.target 
+After=network.target remote-fs.target kafka-zookeeper.service
+
+[Service]
+Type=simple
+User=kafka
+Group=kafka
+ExecStart=/usr/bin/kafka-server-start /etc/kafka/server.properties
+ExecStop=/usr/bin/kafka-server-stop
+
+[Install]
+WantedBy=multi-user.target

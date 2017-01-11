@@ -1,0 +1,13 @@
+---
+- name: Start kafka-zookeeper service
+  command: systemctl start kafka-zookeeper.service
+- name: Pause before starting kafka service
+  command: sleep 10
+- name: Start kafka service
+  command: systemctl start kafka.service
+- name: Pause before starting confluent-schema-registry service
+  command: sleep 10
+  when: kafka_distro == "confluent"
+- name: Start confluent-schema-registry service
+  command: systemctl start confluent-schema-registry.service
+  when: kafka_distro == "confluent"

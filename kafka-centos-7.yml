@@ -1,0 +1,10 @@
+---
+- name: Install/configure confluent servers (kafka and zookeeper)
+  hosts: all
+  remote_user: root
+  become: true
+  roles:
+    - ensure-interfaces-up
+    - setup-web-proxy
+    - { role: install-packages, package_list: ["java-1.8.0-openjdk", "java-1.8.0-openjdk-devel"] }
+    - kafka-centos-7

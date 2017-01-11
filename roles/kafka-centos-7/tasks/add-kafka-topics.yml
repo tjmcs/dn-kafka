@@ -1,0 +1,3 @@
+- name: Create kafka topics
+  shell: "{{kafka_topics_cmd}} --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic {{ item }}"
+  with_items: "{{ kafka_topics | default([]) }}"

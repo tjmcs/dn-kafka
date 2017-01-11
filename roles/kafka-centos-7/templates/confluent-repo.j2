@@ -1,0 +1,13 @@
+[Confluent.dist]
+name=Confluent repository (dist)
+baseurl=http://packages.confluent.io/rpm/{{confluent_version}}/$releasever
+gpgcheck=1
+gpgkey=http://packages.confluent.io/rpm/{{confluent_version}}/archive.key
+enabled=1
+
+[Confluent]
+name=Confluent repository
+baseurl=http://packages.confluent.io/rpm/{{confluent_version}}
+gpgcheck=1
+gpgkey=http://packages.confluent.io/rpm/{{confluent_version}}/archive.key
+enabled=1

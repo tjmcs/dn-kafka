@@ -1,0 +1,11 @@
+---
+- name: Create kafka group
+  group:
+    name: kafka
+    system: yes
+- name: Create kafka user
+  user:
+    name: kafka
+    group: kafka
+    createhome: no
+    system: yes

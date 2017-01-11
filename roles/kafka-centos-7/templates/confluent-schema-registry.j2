@@ -1,0 +1,15 @@
+[Unit]
+Description=Confluent Zookeeper server (Kafka)
+Documentation=http://docs.confluent.io
+Requires=network.target remote-fs.target 
+After=network.target remote-fs.target
+
+[Service]
+Type=simple
+User=kafka
+Group=kafka
+ExecStart=/usr/bin/schema-registry-start /etc/schema-registry/schema-registry.properties
+ExecStop=/usr/bin/schema-registry-stop
+
+[Install]
+WantedBy=multi-user.target

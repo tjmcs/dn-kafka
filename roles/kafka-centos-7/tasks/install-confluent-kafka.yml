@@ -1,0 +1,34 @@
+---
+- name: "Add confluent RPM key"
+  rpm_key:
+    key: https://packages.confluent.io/rpm/3.1/archive.key
+    state: present
+    validate_certs: no
+  environment: "{{environment_vars}}"
+- name: Create confluent yum repository file
+  template:
+    src: ../templates/confluent-repo.j2
+    dest: /etc/yum.repos.d/confluent.repo
+    mode: 0644
+- name: "Install confluent"
+  yum:
+    name: confluent-platform-oss-2.11
+    state: present
+  environment: "{{environment_vars}}"
+- name: Create confluent-zookeeper log directory
+  file:
+    path: /var/lib/zookeeper
+    state: directory
+    owner: kafka
+    group: kafka
+- name: Create confluent-kafka log directory
+  file:
+    path: /var/lib/kafka
+    state: directory
+    owner: kafka
+    group: kafka
+- name: Set values for kafka_bin_dir and kafka_config_dir
+  set_fact:
+    kafka_bin_dir: "/usr/bin"
+    kafka_config_dir: "/etc/kafka"
+    kafka_topics_cmd: "kafka-topics"

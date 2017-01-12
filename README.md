@@ -37,7 +37,7 @@ $ ansible-playbook site.yml --inventory-file hosts --extra-vars "kafka_addr=${KA
 As was the case with the Apache Kafka deployment (above), the `kafka_topics` variable is optional (if a value for this variable is not provided, then no topics will be created); all other variables shown in this example must be defined for the playbook to run successfully.
 
 # Assumptions
-It is assumed that this playbook will be run on a recent (systemd-based) version of RHEL or CentOS (RHEL-7.x or CentOS-7.x, for example); no support is provided for other distributions (and the `site.xml` playbook will not run successfully).
+It is assumed that this playbook will be run on a recent (systemd-based) version of RHEL or CentOS (RHEL-7.x or CentOS-7.x, for example); no support is provided for other distributions (and the `site.xml` playbook will not run successfully).  The examples shown above also assume that some (shared-key?) mechanism has been used to provide access to the Kafka host from the Ansible host that the ansible-playbook is being run on (if not, then additional arguments might be required to authenticate with that host from the Ansible host that are not shown in the example `ansible-playbook` commands shown above).
 
 # Deployment via vagrant
 The included Vagrantfile can be used to deploy kafka to a VM using `Vagrant`.  From the top-level directory of this repostory a command like the following will (by default) deploy kafka to a CentOS 7 virtual machine running under VirtualBox (assuming that both vagrant and VirtualBox are installed locally, of course):

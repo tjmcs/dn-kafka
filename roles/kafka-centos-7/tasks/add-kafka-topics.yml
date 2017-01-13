@@ -1,3 +1,7 @@
 - name: Create kafka topics
   shell: "{{kafka_topics_cmd}} --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic {{ item }}"
   with_items: "{{ kafka_topics | default([]) }}"
+  register: command_result
+  failed_when:
+    - "'already exists' not in command_result.stdout"
+    - "command_result.rc != 0"

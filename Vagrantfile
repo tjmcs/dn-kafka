@@ -132,7 +132,7 @@ Vagrant.configure("2") do |config|
   # end
 
   config.vm.provision "ansible" do |ansible|
-    ansible.playbook = "kafka-centos-7.yml"
+    ansible.playbook = "site.yml"
     ansible.extra_vars = {
       proxy_env: { http_proxy: proxy, no_proxy: no_proxy },
       # kafka_url: "https://www-us.apache.org/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz",

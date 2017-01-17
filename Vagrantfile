@@ -44,12 +44,12 @@ rescue Exception => e
   exit 1
 end
 
-if !options[:kafka_addr] && (ARGV[0] == "up" || ARGV[0] == "provision")
-  print "ERROR; server IP address must be supplied for 'up' and 'provision' commands\n"
+if !options[:kafka_addr]
+  print "ERROR; kafka IP address must be supplied for vagrant commands\n"
   print optparse
   exit 1
-elsif options[:kafka_addr] && !(options[:kafka_addr] =~ Resolv::IPv4::Regex)
-  print "ERROR; input server IP address '#{options[:kafka_addr]}' is not a valid IP address"
+elsif !(options[:kafka_addr] =~ Resolv::IPv4::Regex)
+  print "ERROR; input kafka IP address '#{options[:kafka_addr]}' is not a valid IP address"
   exit 2
 end
 
@@ -131,6 +131,9 @@ Vagrant.configure("2") do |config|
   #   push.app = "YOUR_ATLAS_USERNAME/YOUR_APPLICATION_NAME"
   # end
 
+  config.vm.define "#{options[:kafka_addr]}"
+  kafka_addr_array = "#{options[:kafka_addr]}".split(/,\w*/)
+  
   config.vm.provision "ansible" do |ansible|
     ansible.playbook = "site.yml"
     ansible.extra_vars = {
@@ -141,7 +144,9 @@ Vagrant.configure("2") do |config|
       kafka_distro: "#{options[:kafka_distro]}",
       kafka_dir: "/opt/kafka",
       kafka_topics: ["metrics", "logs"],
-      confluent_version: "3.1"
+      confluent_version: "3.1",
+      kafka_package_list: ["java-1.8.0-openjdk", "java-1.8.0-openjdk-devel"],
+      host_inventory: kafka_addr_array
     }
   end
 

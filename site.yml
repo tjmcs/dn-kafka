@@ -1,7 +1,6 @@
 ---
 - name: Install/configure confluent servers (kafka and zookeeper)
   hosts: "{{host_inventory}}"
-  become: true
   roles:
     - ensure-interfaces-up
     - setup-web-proxy

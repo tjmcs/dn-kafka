@@ -133,14 +133,14 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "#{options[:kafka_addr]}"
   kafka_addr_array = "#{options[:kafka_addr]}".split(/,\w*/)
-  
+
   config.vm.provision "ansible" do |ansible|
     ansible.playbook = "site.yml"
     ansible.extra_vars = {
       proxy_env: { http_proxy: proxy, no_proxy: no_proxy },
       # kafka_url: "https://www-us.apache.org/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz",
       kafka_url: "https://10.0.2.2/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz",
-      kafka_addr: "#{options[:kafka_addr]}",
+      kafka_iface: "eth1",
       kafka_distro: "#{options[:kafka_distro]}",
       kafka_dir: "/opt/kafka",
       kafka_topics: ["metrics", "logs"],

@@ -1,8 +1,10 @@
 ---
-- name: Install/configure confluent servers (kafka and zookeeper)
+- name: Install/configure servers (kafka and zookeeper)
   hosts: "{{host_inventory}}"
   roles:
     - ensure-interfaces-up
+    - role: get-iface-addr
+      iface_name: "{{kafka_iface}}"
     - setup-web-proxy
     - { role: install-packages, package_list: "{{kafka_package_list}}"}
-    - dn-kafka
+    - { role: dn-kafka, kafka_addr: "{{iface_addr}}" }

@@ -1,4 +1,5 @@
 - name: Configure kafka server instance
+  become: true
   replace:
     dest: "{{kafka_config_dir}}/server.properties"
     regexp: '^\#(([a-zA-Z]*.?)listeners=PLAINTEXT://).*(:9092)$'

@@ -1,4 +1,5 @@
 - name: Download kafka distribution to /tmp
+  become: true
   get_url:
     url: "{{kafka_url}}"
     dest: /tmp
@@ -6,12 +7,14 @@
     validate_certs: no
   environment: "{{environment_vars}}"
 - name: Create "{{kafka_dir}}"
+  become: true
   file:
     path: "{{kafka_dir}}"
     state: directory
     owner: kafka
     group: kafka
 - name: Unpack kafka distribution into "{{kafka_dir}}"
+  become: true
   unarchive:
     copy: no
     src: "/tmp/kafka_2.11-0.10.1.0.tgz"

@@ -1,4 +1,6 @@
 - name: Create kafka topics
+  become: true
+  become_user: kafka
   shell: "{{kafka_topics_cmd}} --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic {{ item }}"
   with_items: "{{ kafka_topics | default([]) }}"
   register: command_result

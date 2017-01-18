@@ -1,3 +1,4 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
 ---
 - name: Install/configure servers (kafka and zookeeper)
   hosts: "{{host_inventory}}"

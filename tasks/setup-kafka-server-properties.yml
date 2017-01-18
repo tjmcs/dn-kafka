@@ -1,3 +1,4 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
 - name: Configure kafka server instance
   become: true
   replace:

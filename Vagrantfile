@@ -1,3 +1,4 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 

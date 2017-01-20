@@ -27,7 +27,7 @@ The `kafka_topics` variable is optional (if a value for this variable is not pro
 If, on the other hand, you wanted to install the Confluent Kafka distribution onto that same node, a set of commands like the following would be used instead:
 ```bash
 $ export KAFKA_ADDR="192.168.34.8"
-$ export KAFKA_IFACE="eth1"
+$ export KAFKA_IFACE="eth0"
 $ export KAFKA_DISTRO="confluent"
 $ export CONFLUENT_VER="3.1
 $ export KAFKA_TOPICS='["metrics", "logs"]'

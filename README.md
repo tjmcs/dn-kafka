@@ -17,10 +17,11 @@ $ export KAFKA_IFACE="eth0"
 $ export KAFKA_DISTRO="apache"
 $ export KAFKA_DIR="/opt/kafka"
 $ export KAFKA_TOPICS='["metrics", "logs"]'
+$ export KAFKA_PACKAGE_LIST='["java-1.8.0-openjdk", "java-1.8.0-openjdk-devel"]'
 $ echo "[all]\n${KAFKA_ADDR}" > hosts
 $ ansible-playbook site.yml --inventory-file hosts --extra-vars "kafka_url=${KAFKA_URL} \
     kafka_iface=${KAFKA_IFACE} kafka_distro=${KAFKA_DISTRO} kafka_dir=${KAFKA_DIR} \
-    kafka_topics=${KAFKA_TOPICS}"
+    kafka_topics=${KAFKA_TOPICS} kafka_package_list=${KAFKA_PACKAGE_LIST}"
 ```
 The `kafka_topics` variable is optional (if a value for this variable is not provided, then no topics will be created); all other variables shown in this example must be defined for the playbook to run successfully.
 
@@ -31,10 +32,11 @@ $ export KAFKA_IFACE="eth0"
 $ export KAFKA_DISTRO="confluent"
 $ export CONFLUENT_VER="3.1
 $ export KAFKA_TOPICS='["metrics", "logs"]'
+$ export KAFKA_PACKAGE_LIST='["java-1.8.0-openjdk", "java-1.8.0-openjdk-devel"]'
 $ echo "[all]\n${KAFKA_ADDR}" > hosts
 $ ansible-playbook site.yml --inventory-file hosts --extra-vars "kafka_iface=${KAFKA_IFACE} \
     kafka_distro=${KAFKA_DISTRO} confluent_version=${CONFLUENT_VER} \
-    kafka_topics=${KAFKA_TOPICS}"
+    kafka_topics=${KAFKA_TOPICS} kafka_package_list=${KAFKA_PACKAGE_LIST}"
 ```
 As was the case with the Apache Kafka deployment (above), the `kafka_topics` variable is optional (if a value for this variable is not provided, then no topics will be created); all other variables shown in this example must be defined for the playbook to run successfully.
 

@@ -2,10 +2,12 @@
 ---
 - name: Install/configure servers (kafka and zookeeper)
   hosts: "{{host_inventory}}"
+  vars:
+    - combined_package_list: "{{ (default_packages|default([])) | union(kafka_package_list) | union((install_packages_by_tag|default({})).kafka|default([])) }}"
   roles:
     - ensure-interfaces-up
     - role: get-iface-addr
       iface_name: "{{kafka_iface}}"
     - setup-web-proxy
-    - { role: install-packages, package_list: "{{kafka_package_list}}"}
+    - { role: install-packages, package_list: "{{combined_package_list}}" }
     - { role: dn-kafka, kafka_addr: "{{iface_addr}}" }

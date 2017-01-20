@@ -13,12 +13,13 @@ To run the included playbook, change directories to the `dn-kafka` subdirectory 
 ```bash
 $ export KAFKA_URL="https://www-us.apache.org/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz"
 $ export KAFKA_ADDR="192.168.34.8"
+$ export KAFKA_IFACE="eth0"
 $ export KAFKA_DISTRO="apache"
 $ export KAFKA_DIR="/opt/kafka"
 $ export KAFKA_TOPICS='["metrics", "logs"]'
 $ echo "[all]\n${KAFKA_ADDR}" > hosts
 $ ansible-playbook site.yml --inventory-file hosts --extra-vars "kafka_url=${KAFKA_URL} \
-    kafka_addr=${KAFKA_ADDR} kafka_distro=${KAFKA_DISTRO} kafka_dir=${KAFKA_DIR} \
+    kafka_iface=${KAFKA_IFACE} kafka_distro=${KAFKA_DISTRO} kafka_dir=${KAFKA_DIR} \
     kafka_topics=${KAFKA_TOPICS}"
 ```
 The `kafka_topics` variable is optional (if a value for this variable is not provided, then no topics will be created); all other variables shown in this example must be defined for the playbook to run successfully.
@@ -26,11 +27,12 @@ The `kafka_topics` variable is optional (if a value for this variable is not pro
 If, on the other hand, you wanted to install the Confluent Kafka distribution onto that same node, a set of commands like the following would be used instead:
 ```bash
 $ export KAFKA_ADDR="192.168.34.8"
+$ export KAFKA_IFACE="eth1"
 $ export KAFKA_DISTRO="confluent"
 $ export CONFLUENT_VER="3.1
 $ export KAFKA_TOPICS='["metrics", "logs"]'
 $ echo "[all]\n${KAFKA_ADDR}" > hosts
-$ ansible-playbook site.yml --inventory-file hosts --extra-vars "kafka_addr=${KAFKA_ADDR} \
+$ ansible-playbook site.yml --inventory-file hosts --extra-vars "kafka_iface=${KAFKA_IFACE} \
     kafka_distro=${KAFKA_DISTRO} confluent_version=${CONFLUENT_VER} \
     kafka_topics=${KAFKA_TOPICS}"
 ```

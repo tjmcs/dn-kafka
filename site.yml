@@ -2,6 +2,8 @@
 ---
 - name: Install/configure servers (kafka and zookeeper)
   hosts: "{{host_inventory}}"
+  vars_files:
+    - vars/kafka.yml
   vars:
     - combined_package_list: "{{ (default_packages|default([])) | union(kafka_package_list) | union((install_packages_by_tag|default({})).kafka|default([])) }}"
   roles:

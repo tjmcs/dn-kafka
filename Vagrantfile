@@ -5,6 +5,22 @@
 require 'optparse'
 require 'resolv'
 
+# monkey-patch that is used to leave unrecognized options in the ARGV
+# list so that they can be processed by underlying vagrant command
+class OptionParser
+  # Like order!, but leave any unrecognized --switches alone
+  def order_recognized!(args)
+    extra_opts = []
+    begin
+      order!(args) { |a| extra_opts << a }
+    rescue OptionParser::InvalidOption => e
+      extra_opts << e.args[0]
+      retry
+    end
+    args[0, 0] = extra_opts
+  end
+end
+
 options = {}
 valid_kafka_distros = ['confluent', 'apache']
 
@@ -36,7 +52,7 @@ end
 # default to using the confluent distro if no distro was specified
 options[:kafka_distro] = "confluent"
 begin
-  optparse.parse!
+  optparse.order_recognized!(ARGV)
 rescue SystemExit
   ;
 rescue Exception => e
@@ -152,16 +168,17 @@ Vagrant.configure("2") do |config|
         proxy_username: proxy_username,
         proxy_password: proxy_password
       },
-      # kafka_url: "https://www-us.apache.org/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz",
-      kafka_url: "https://10.0.2.2/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz",
       kafka_iface: "eth1",
       kafka_distro: "#{options[:kafka_distro]}",
-      kafka_dir: "/opt/kafka",
-      kafka_topics: ["metrics", "logs"],
-      confluent_version: "3.1",
-      kafka_package_list: ["java-1.8.0-openjdk", "java-1.8.0-openjdk-devel"],
       host_inventory: kafka_addr_array
     }
+    if ansible.extra_vars[:kafka_distro] == "apache"
+      ansible.extra_vars[:scala_version] = "2.11"
+      ansible.extra_vars[:kafka_version] = "0.10.1.0"
+      # ansible.extra_vars[:kafka_url] = "https://www-us.apache.org/dist/kafka/{{kafka_version}}/kafka_{{scala_version}}-{{kafka_version}}.tgz",
+      ansible.extra_vars[:kafka_url] = "https://10.0.2.2/dist/kafka/{{kafka_version}}/kafka_{{scala_version}}-{{kafka_version}}.tgz"
+      ansible.extra_vars[:kafka_dir] = "/opt/kafka"
+    end
   end
 
 end

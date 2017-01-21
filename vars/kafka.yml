@@ -1,0 +1,14 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+#
+# Defaults that are necessary for all deployments of
+# kafka
+---
+# kafka_distro: apache
+# kafka_url: "https://www-us.apache.org/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz"
+# kafka_url: "https://10.0.2.2/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz"
+# kafka_dir: "/opt/kafka"
+kafka_iface: eth0
+kafka_distro: confluent
+confluent_version: "3.1"
+kafka_topics: ["metrics", "logs"]
+kafka_package_list: ["java-1.8.0-openjdk", "java-1.8.0-openjdk-devel"]

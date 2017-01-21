@@ -3,6 +3,7 @@
 # Defaults that are necessary for all deployments of
 # kafka
 ---
+application: kafka
 # kafka_distro: apache
 # kafka_url: "https://www-us.apache.org/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz"
 # kafka_url: "https://10.0.2.2/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz"

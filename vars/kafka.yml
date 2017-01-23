@@ -4,14 +4,22 @@
 # kafka
 ---
 application: kafka
-# scala_version: "2.11"
-# kafka_version: "0.10.1.0"
-# kafka_distro: apache
-# kafka_url: "https://www-us.apache.org/dist/kafka/{{kafka_version}}/kafka_{{scala_version}}-{{kafka_version}}.tgz"
-# kafka_url: "https://10.0.2.2/dist/kafka/{{kafka_version}}/kafka_{{scala_version}}-{{kafka_version}}.tgz"
-# kafka_dir: "/opt/kafka"
-kafka_iface: eth0
+# the distribution of Kafka that should be installed (apache or confluent)
 kafka_distro: confluent
+# the interface Kafka should listen on when running
+kafka_iface: eth0
+# the following parameters are only used when provisioning an instance
+# of the apache distribution, but are uncommented here (regardless) to
+# provide reasonable default values when provisioning via Vagrant (where
+# the distribution being provisioned may be different from the default)
+scala_version: "2.11"
+kafka_version: "0.10.1.0"
+kafka_url: "https://www-us.apache.org/dist/kafka/{{kafka_version}}/kafka_{{scala_version}}-{{kafka_version}}.tgz"
+kafka_dir: "/opt/kafka"
+# this value is only used when installing the confluent distribution,
+# but is uncommented here so that it can be used if a confluent distribution
+# is chosen when provisioning via Vagrant
 confluent_version: "3.1"
+# these parameters are used for both confluent and apache distributions
 kafka_topics: ["metrics", "logs"]
 kafka_package_list: ["java-1.8.0-openjdk", "java-1.8.0-openjdk-devel"]

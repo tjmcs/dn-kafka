@@ -23,6 +23,7 @@ end
 
 options = {}
 valid_kafka_distros = ['confluent', 'apache']
+no_ip_commands = ['version', 'global-status', '--help', '-h']
 
 optparse = OptionParser.new do |opts|
   opts.banner    = "Usage: #{opts.program_name} [options]"
@@ -42,6 +43,20 @@ optparse = OptionParser.new do |opts|
     options[:kafka_distro] = kafka_distro.gsub(/^=/,'')
   end
 
+  options[:kafka_path] = nil
+  opts.on( '-p', '--path KAFKA_DIR', 'Path where the distribution should be installed' ) do |kafka_path|
+    # while parsing, trim an '=' prefix character off the front of the string if it exists
+    # (would occur if the value was passed using an option flag like '-p=/opt/kafka')
+    options[:kafka_path] = kafka_path.gsub(/^=/,'')
+  end
+
+  options[:kafka_url] = nil
+  opts.on( '-u', '--url KAFKA_URL', 'URL the distribution should be downloaded from' ) do |kafka_url|
+    # while parsing, trim an '=' prefix character off the front of the string if it exists
+    # (would occur if the value was passed using an option flag like '-u=http://localhost/tmp.tgz')
+    options[:kafka_url] = kafka_url.gsub(/^=/,'')
+  end
+
   opts.on_tail( '-h', '--help', 'Display this screen' ) do
     print opts
     exit
@@ -53,26 +68,35 @@ end
 options[:kafka_distro] = "confluent"
 begin
   optparse.order_recognized!(ARGV)
-rescue SystemExit
-  ;
+rescue SystemExit => e
+  exit
 rescue Exception => e
   print "ERROR: could not parse command (#{e.message})\n"
   print optparse
   exit 1
 end
 
-if !options[:kafka_addr]
+# check remaining arguments to see if the command requires
+# an IP address (or not)
+ip_required = (ARGV & no_ip_commands).empty?
+
+if ip_required && !options[:kafka_addr]
   print "ERROR; kafka IP address must be supplied for vagrant commands\n"
   print optparse
   exit 1
-elsif !(options[:kafka_addr] =~ Resolv::IPv4::Regex)
-  print "ERROR; input kafka IP address '#{options[:kafka_addr]}' is not a valid IP address"
+elsif ip_required && !(options[:kafka_addr] =~ Resolv::IPv4::Regex)
+  print "ERROR; input kafka IP address '#{options[:kafka_addr]}' is not a valid IP address\n"
   exit 2
+end
+
+if options[:kafka_url] && !(options[:kafka_url] =~ URI::regexp)
+  print "ERROR; input kafka URL '#{options[:kafka_url]}' is not a valid URL\n"
+  exit 3
 end
 
 if !(valid_kafka_distros.include?(options[:kafka_distro]))
     print "ERROR; Unrecognized kafka_distro value specified; valid values are #{valid_kafka_distros}\n"
-    exit 3
+    exit 4
 end
 
 # All Vagrant configuration is done below. The "2" in Vagrant.configure
@@ -173,11 +197,16 @@ Vagrant.configure("2") do |config|
       host_inventory: kafka_addr_array
     }
     if ansible.extra_vars[:kafka_distro] == "apache"
-      ansible.extra_vars[:scala_version] = "2.11"
-      ansible.extra_vars[:kafka_version] = "0.10.1.0"
-      # ansible.extra_vars[:kafka_url] = "https://www-us.apache.org/dist/kafka/{{kafka_version}}/kafka_{{scala_version}}-{{kafka_version}}.tgz",
-      ansible.extra_vars[:kafka_url] = "https://10.0.2.2/dist/kafka/{{kafka_version}}/kafka_{{scala_version}}-{{kafka_version}}.tgz"
-      ansible.extra_vars[:kafka_dir] = "/opt/kafka"
+      # if defined, set the 'extra_vars[:kafka_url]' value to the value that was passed in on
+      # the command-line (eg. "https://10.0.2.2/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz")
+      if options[:kafka_url]
+        ansible.extra_vars[:kafka_url] = "#{options[:kafka_url]}"
+      end
+      # if defined, set the 'extra_vars[:kafka_dir]' value to the value that was passed in on
+      # the command-line (eg. "/opt/kafka")
+      if options[:kafka_path]
+        ansible.extra_vars[:kafka_dir] = "#{options[:kafka_path]}"
+      end
     end
   end
 

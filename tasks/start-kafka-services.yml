@@ -3,17 +3,26 @@
 - name: Start kafka-zookeeper service
   become: true
   command: systemctl start kafka-zookeeper.service
+  tags:
+    - zookeeper
 - name: Pause before starting kafka service
   become: true
   command: sleep 10
+  tags:
+    - kafka
 - name: Start kafka service
   become: true
   command: systemctl start kafka.service
+  tags:
+    - kafka
 - name: Pause before starting confluent-schema-registry service
-  become: true
   command: sleep 10
   when: kafka_distro == "confluent"
+  tags:
+    - kafka
 - name: Start confluent-schema-registry service
   become: true
   command: systemctl start confluent-schema-registry.service
   when: kafka_distro == "confluent"
+  tags:
+    - kafka

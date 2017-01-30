@@ -1,10 +1,22 @@
 # (c) 2016 DataNexus Inc.  All Rights Reserved
+- name: Choose a zookeeper node
+  set_fact: zk_node={{(zookeeper_nodes|shuffle).0}}
+  when: zookeeper_nodes is defined and zookeeper_nodes != []
+  tags:
+    - kafka
+- name: Set zookeeper node to localhost when not defined
+  set_fact: zk_node=localhost
+  when: not(zookeeper_nodes is defined and zookeeper_nodes != [])
+  tags:
+    - kafka
 - name: Create kafka topics
   become: true
   become_user: kafka
-  shell: "{{kafka_topics_cmd}} --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic {{ item }}"
+  shell: "{{kafka_topics_cmd}} --create --zookeeper {{zk_node}}:2181 --replication-factor 1 --partitions 1 --topic {{ item }}"
   with_items: "{{ kafka_topics | default([]) }}"
   register: command_result
   failed_when:
     - "'already exists' not in command_result.stdout"
     - "command_result.rc != 0"
+  tags:
+    - kafka

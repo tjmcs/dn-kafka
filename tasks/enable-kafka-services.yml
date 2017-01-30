@@ -3,10 +3,16 @@
 - name: Enable kafka-zookeeper service on boot
   become: true
   command: systemctl enable kafka-zookeeper.service
+  tags:
+    - zookeeper
 - name: Enable kafka service on boot
   become: true
   command: systemctl enable kafka.service
+  tags:
+    - kafka
 - name: Enable confluent-schema-registry service on boot
   become: true
   command: systemctl enable confluent-schema-registry.service
   when: kafka_distro == "confluent"
+  tags:
+    - kafka

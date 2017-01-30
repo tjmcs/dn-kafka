@@ -4,10 +4,13 @@
 # kafka
 ---
 application: kafka
+
 # the distribution of Kafka that should be installed (apache or confluent)
 kafka_distro: confluent
+
 # the interface Kafka should listen on when running
 kafka_iface: eth0
+
 # the following parameters are only used when provisioning an instance
 # of the apache distribution, but are uncommented here (regardless) to
 # provide reasonable default values when provisioning via Vagrant (where
@@ -16,10 +19,21 @@ scala_version: "2.11"
 kafka_version: "0.10.1.0"
 kafka_url: "https://www-us.apache.org/dist/kafka/{{kafka_version}}/kafka_{{scala_version}}-{{kafka_version}}.tgz"
 kafka_dir: "/opt/kafka"
+
 # this value is only used when installing the confluent distribution,
 # but is uncommented here so that it can be used if a confluent distribution
 # is chosen when provisioning via Vagrant
 confluent_version: "3.1"
+
 # these parameters are used for both confluent and apache distributions
 kafka_topics: ["metrics", "logs"]
 kafka_package_list: ["java-1.8.0-openjdk", "java-1.8.0-openjdk-devel"]
+
+# used to add extra repositories to the list of repositories in the
+# `local.repo` file that is deployed to a node when we're adding a
+# local repository to use in the provisioning process
+#local_repository_url: http://{{yum_repository}}/local.repo
+#local_repository_extra_keys: http://{{yum_repository}}/local-keys.json
+
+# used to install kafka from the RPM files in a local directory (if it exists)
+local_kafka_package_path: ""

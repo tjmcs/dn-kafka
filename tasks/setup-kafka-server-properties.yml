@@ -5,3 +5,65 @@
     dest: "{{kafka_config_dir}}/server.properties"
     regexp: '^\#(([a-zA-Z]*.?)listeners=PLAINTEXT://).*(:9092)$'
     replace: '\g<1>{{kafka_addr}}\g<3>'
+  tags:
+    - kafka
+- name: Setup host.name for kafka cluster
+  become: true
+  lineinfile:
+    dest: "{{kafka_config_dir}}/server.properties"
+    regexp: "^host.name="
+    line: "host.name={{kafka_addr}}"
+  when: (zookeeper_nodes | default([])) != []
+  tags:
+    - kafka
+- name: Setup broker.id for kafka cluster
+  become: true
+  lineinfile:
+    dest: "{{kafka_config_dir}}/server.properties"
+    regexp: "^broker.id="
+    line: "broker.id={{item.0}}"
+  with_indexed_items: "{{host_inventory}}"
+  when: "'{{iface_addr}}' == '{{item.1}}'"
+  tags:
+    - kafka
+- name: Setup kafka configuration for zookeeper cluster
+  become: true
+  lineinfile:
+    dest: "{{kafka_config_dir}}/server.properties"
+    regexp: "^zookeeper.connect"
+    line: "zookeeper.connect={{(zookeeper_nodes | default([])) | join(':2181,')}}:2181"
+  when: (zookeeper_nodes | default([])) != []
+  tags:
+    - kafka
+- name: "Configure the zookeeper cluster timeouts"
+  become: true
+  lineinfile:
+    dest: "{{kafka_config_dir}}/zookeeper.properties"
+    regexp: "^{{item.key}}"
+    line: "{{item.key}}={{item.val}}"
+  with_items:
+    - { key: 'initLimit', val: '5' }
+    - { key: 'syncLimit', val: '2' }
+  when: (zookeeper_nodes | default([])) != []
+  tags:
+    - zookeeper
+- name: "Configure the zookeeper cluster addresses"
+  become: true
+  lineinfile:
+    dest: "{{kafka_config_dir}}/zookeeper.properties"
+    regexp: "^server.{{item.0}}"
+    line: "server.{{item.0}}={{item.1}}:2888:3888"
+  with_indexed_items: "{{zookeeper_nodes | default([])}}"
+  tags:
+    - zookeeper
+- name: "Setup the 'myid' file for this zookeeper node"
+  become: true
+  lineinfile:
+    dest: "/var/lib/zookeeper/myid"
+    create: yes
+    regexp: "^[0-9]"
+    line: "{{item.0}}"
+  with_indexed_items: "{{zookeeper_nodes | default([])}}"
+  when: "'{{iface_addr}}' == '{{item.1}}'"
+  tags:
+    - zookeeper

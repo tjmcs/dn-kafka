@@ -7,9 +7,24 @@
   vars:
     - combined_package_list: "{{ (default_packages|default([])) | union(kafka_package_list) | union((install_packages_by_tag|default({})).kafka|default([])) }}"
   roles:
-    - ensure-interfaces-up
+    - role: ensure-interfaces-up
+      tags:
+        - always
     - role: get-iface-addr
       iface_name: "{{kafka_iface}}"
-    - setup-web-proxy
-    - { role: install-packages, package_list: "{{combined_package_list}}" }
-    - { role: dn-kafka, kafka_addr: "{{iface_addr}}" }
+      tags:
+        - always
+    - role: setup-web-proxy
+      tags:
+        - always
+    - role: add-local-repository
+      yum_repository: "{{yum_repo_addr}}"
+      tags:
+        - always
+      when: yum_repository is defined and local_repository_url is defined
+    - role: install-packages
+      package_list: "{{combined_package_list}}"
+      tags:
+        - always
+    - role: dn-kafka
+      kafka_addr: "{{iface_addr}}"

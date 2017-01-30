@@ -1,0 +1,86 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+---
+- name: "Add confluent RPM key"
+  become: true
+  rpm_key:
+    key: https://packages.confluent.io/rpm/3.1/archive.key
+    state: present
+    validate_certs: no
+  environment: "{{environment_vars}}"
+  when: not(yum_repo_addr is undefined or yum_repo_addr is none or yum_repo_addr | trim == '' or local_confluent_repository is defined or not(local_confluent_repository))
+  tags:
+    - always
+- name: Create confluent yum repository file
+  become: true
+  template:
+    src: ../templates/confluent-repo.j2
+    dest: /etc/yum.repos.d/confluent.repo
+    mode: 0644
+  when: not(yum_repo_addr is undefined or yum_repo_addr is none or yum_repo_addr | trim == '' or local_confluent_repository is defined or not(local_confluent_repository))
+  tags:
+    - always
+- name: Install confluent from repository
+  become: true
+  yum:
+    name: confluent-platform-oss-2.11
+    state: present
+  environment: "{{environment_vars}}"
+  when: local_kafka_package_path is undefined or local_kafka_package_path is none or local_kafka_package_path | trim == ''
+  tags:
+    - always
+- name: Copy confluent files from a local directory to /tmp on remote machine
+  copy:
+    src: "{{local_kafka_package_path}}"
+    dest: "/tmp"
+  tags:
+    - always
+- name: Get a list of the packages copied over
+  find:
+    paths: "/tmp/{{local_kafka_package_path.split('/')[-1]}}"
+    patterns: "*.rpm"
+  register: rpm_list
+  tags:
+    - always
+- name: Install all of the packages copied over
+  become: true
+  yum:
+    name: "{{rpm_list.files | map(attribute='path') | list | join(',')}}"
+    state: present
+  # environment: "{{environment_vars}}"
+  when: not(local_kafka_package_path is undefined or local_kafka_package_path is none or local_kafka_package_path | trim == '')
+  tags:
+    - always
+- name: Create confluent-zookeeper log directory
+  become: true
+  file:
+    path: /var/lib/zookeeper
+    state: directory
+    owner: kafka
+    group: kafka
+  tags:
+    - zookeeper
+- name: Create confluent-kafka log directory
+  become: true
+  file:
+    path: /var/lib/kafka
+    state: directory
+    owner: kafka
+    group: kafka
+  tags:
+    - kafka
+- name: Create /var/log/kafka directory
+  become: true
+  file:
+    path: /var/log/kafka
+    state: directory
+    owner: kafka
+    group: kafka
+  tags:
+    - always
+- name: Set values for kafka_bin_dir and kafka_config_dir
+  set_fact:
+    kafka_bin_dir: "/usr/bin"
+    kafka_config_dir: "/etc/kafka"
+    kafka_topics_cmd: "kafka-topics"
+  tags:
+    - always

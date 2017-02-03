@@ -1,4 +1,5 @@
 # (c) 2016 DataNexus Inc.  All Rights Reserved
+---
 - name: Choose a zookeeper node
   set_fact: zk_node={{(zookeeper_nodes|shuffle).0}}
   when: zookeeper_nodes is defined and zookeeper_nodes != []

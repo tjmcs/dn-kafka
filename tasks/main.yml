@@ -1,4 +1,5 @@
 # (c) 2016 DataNexus Inc.  All Rights Reserved
+---
 - include: add-kafka-user.yml static=no
 - include: setup-{{kafka_distro}}-kafka.yml static=no
 - include: setup-kafka-server-properties.yml static=no

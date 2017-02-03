@@ -1,4 +1,5 @@
 # (c) 2016 DataNexus Inc.  All Rights Reserved
+---
 - name: Download kafka distribution to /tmp
   become: true
   get_url:

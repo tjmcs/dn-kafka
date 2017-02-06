@@ -8,6 +8,9 @@ application: kafka
 # the distribution of Kafka that should be installed (apache or confluent)
 kafka_distro: confluent
 
+# the directory where the Kafka logs will be written
+kafka_log_dir: /var/lib
+
 # the interface Kafka should listen on when running
 kafka_iface: eth0
 

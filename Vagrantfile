@@ -22,7 +22,10 @@ class OptionParser
 end
 
 options = {}
-valid_kafka_distros = ['confluent', 'apache']
+# define an array containg the list of Kafka distributions supported by the
+# underlying playbook used for provisioning
+VALID_KAFKA_DISTROS = ['confluent', 'apache']
+
 # vagrant commands that include these commands can be run without specifying
 # any IP addresses
 no_ip_commands = ['version', 'global-status', '--help', '-h']
@@ -100,6 +103,13 @@ optparse = OptionParser.new do |opts|
     options[:yum_repo_addr] = yum_repo_addr.gsub(/^=/,'')
   end
 
+  options[:kafka_log_dir] = nil
+  opts.on( '-r', '--remote-log-dir REPO_HOST', 'Local yum repository hostname/address' ) do |kafka_log_dir|
+    # while parsing, trim an '=' prefix character off the front of the string if it exists
+    # (would occur if the value was passed using an option flag like '-r="/data"')
+    options[:kafka_log_dir] = kafka_log_dir.gsub(/^=/,'')
+  end
+
   opts.on_tail( '-h', '--help', 'Display this screen' ) do
     print opts
     exit
@@ -134,12 +144,12 @@ if options[:kafka_url] && !(options[:kafka_url] =~ URI::regexp)
 end
 
 if options[:local_kafka_path] && !File.directory?(options[:local_kafka_path])
-  print "ERROR; input kafka URL '#{options[:kafka_url]}' is not a local directory\n"
+  print "ERROR; input local Kafka path '#{options[:local_kafka_path]}' is not a local directory\n"
   exit 3
 end
 
-if !(valid_kafka_distros.include?(options[:kafka_distro]))
-    print "ERROR; Unrecognized kafka_distro value specified; valid values are #{valid_kafka_distros}\n"
+if !(VALID_KAFKA_DISTROS.include?(options[:kafka_distro]))
+    print "ERROR; Unrecognized kafka_distro value specified; valid values are #{VALID_KAFKA_DISTROS}\n"
     exit 4
 end
 
@@ -302,6 +312,7 @@ if deployment_addr_hash['zookeeper']
     all_addr_array = deployment_addr_hash['zookeeper'] + (deployment_addr_hash['kafka'] || [])
     all_addr_array.each do |machine_addr|
       config.vm.define machine_addr do |machine|
+        # setup a private network for this machine
         machine.vm.network "private_network", ip: machine_addr
         # if it's the last node in the list if input addresses, then provision
         # all of the nodes sumultaneously (if the `--no-provision` flag was not
@@ -368,6 +379,11 @@ if deployment_addr_hash['zookeeper']
                 local_kafka_package_path: options[:local_kafka_path],
                 host_inventory: deployment_addr_array
               }
+              # if a kafka log directory was set, then set an extra variable
+              # containing the named directory
+              if options[:kafka_log_dir]
+                ansible.extra_vars[:kafka_log_dir] = options[:kafka_log_dir]
+              end
               # if it's an Apache Kafka deployment, then set the `kafka_url` and
               # `kafka_path` extra variables, if values for these parameters were
               # included on the command-line

@@ -8,6 +8,14 @@
     replace: '\g<1>{{kafka_addr}}\g<3>'
   tags:
     - kafka
+- name: Configure server to use that data directory
+  become: true
+  lineinfile:
+    dest: "{{kafka_config_dir}}/server.properties"
+    regexp: "^log.dirs"
+    line: "log.dirs={{kafka_log_dir}}/kafka"
+  tags:
+    - kafka
 - name: Setup host.name for kafka cluster
   become: true
   lineinfile:
@@ -27,6 +35,24 @@
   when: "'{{iface_addr}}' == '{{item.1}}'"
   tags:
     - kafka
+- name: setup confluent-schema-registry listener if deploying a clustered confluent distribution
+  become: true
+  replace:
+    dest: "{{schema_registry_config_dir}}/schema-registry.properties"
+    regexp: '^(listeners=http://)0.0.0.0(.*)$'
+    replace: '\g<1>{{kafka_addr}}\g<2>'
+  when: schema_registry_config_dir is defined and zookeeper_nodes is defined and zookeeper_nodes != []
+  tags:
+    - kafka
+- name: setup kafkastore connection URL if deploying a clustered confluent distribution
+  become: true
+  replace:
+    dest: "{{schema_registry_config_dir}}/schema-registry.properties"
+    regexp: '^(kafkastore.connection.url=)localhost(.*)$'
+    replace: '\g<1>{{(zookeeper_nodes|shuffle).0}}\g<2>'
+  when: schema_registry_config_dir is defined and zookeeper_nodes is defined and zookeeper_nodes != []
+  tags:
+    - kafka
 - name: Setup kafka configuration for zookeeper cluster
   become: true
   lineinfile:
@@ -36,6 +62,14 @@
   when: (zookeeper_nodes | default([])) != []
   tags:
     - kafka
+- name: Configure zookeeper server to use that data directory
+  become: true
+  lineinfile:
+    dest: "{{kafka_config_dir}}/zookeeper.properties"
+    regexp: "^dataDir"
+    line: "dataDir={{kafka_log_dir}}/zookeeper"
+  tags:
+    - zookeeper
 - name: "Configure the zookeeper cluster timeouts"
   become: true
   lineinfile:
@@ -60,7 +94,7 @@
 - name: "Setup the 'myid' file for this zookeeper node"
   become: true
   lineinfile:
-    dest: "/var/lib/zookeeper/myid"
+    dest: "{{kafka_log_dir}}/zookeeper/myid"
     create: yes
     regexp: "^[0-9]"
     line: "{{item.0}}"

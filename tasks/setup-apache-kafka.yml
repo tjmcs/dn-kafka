@@ -30,6 +30,28 @@
     group: kafka
   tags:
     - always
+# Now that we've installed the packages that we need, setup the appropriate `log`
+# directories for Zookeeper and/or Kafka (depending on the role, or roles in the
+# case of a single-node deployment, that each node will be playing in our cluster)
+# and finish by setting up some facts that we'll need later in our playbook
+- name: Create apache-zookeeper log directory
+  become: true
+  file:
+    path: "{{kafka_log_dir}}/zookeeper"
+    state: directory
+    owner: kafka
+    group: kafka
+  tags:
+    - zookeeper
+- name: Create apache-kafka log directory
+  become: true
+  file:
+    path: "{{kafka_log_dir}}/kafka"
+    state: directory
+    owner: kafka
+    group: kafka
+  tags:
+    - kafka
 - name: Set values for kafka_bin_dir and kafka_config_dir
   set_fact:
     kafka_bin_dir: "{{kafka_dir}}/bin"

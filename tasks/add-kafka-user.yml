@@ -5,6 +5,8 @@
   group:
     name: kafka
     system: yes
+  tags:
+    - always
 - name: Create kafka user
   become: true
   user:
@@ -12,3 +14,5 @@
     group: kafka
     createhome: no
     system: yes
+  tags:
+    - always

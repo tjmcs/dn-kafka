@@ -6,12 +6,16 @@
     src: "../templates/{{kafka_distro}}-zookeeper.j2"
     dest: /etc/systemd/system/kafka-zookeeper.service
     mode: 0644
+  tags:
+    - zookeeper
 - name: Create kafka service file
   become: true
   template:
     src: "../templates/{{kafka_distro}}-kafka.j2"
     dest: /etc/systemd/system/kafka.service
     mode: 0644
+  tags:
+    - kafka
 - name: Create confluent-schema-registry service file
   become: true
   template:
@@ -19,6 +23,10 @@
     dest: /etc/systemd/system/confluent-schema-registry.service
     mode: 0644
   when: kafka_distro == "confluent"
+  tags:
+    - kafka
 - name: restart systemctl daemon
   become: true
   command: systemctl daemon-reload
+  tags:
+    - always

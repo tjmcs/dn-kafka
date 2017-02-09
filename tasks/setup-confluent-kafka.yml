@@ -32,7 +32,7 @@
       mode: 0644
   when: not(install_from_dir) and (local_confluent_repository is undefined or not(local_confluent_repository))
   tags:
-  - always
+    - always
 # if we're installing from a repository (either a local repository or the standard
 # Confluent repository), then install the Confluent package from that repository
 - block:
@@ -53,15 +53,11 @@
     copy:
       src: "{{local_kafka_package_path}}"
       dest: "/tmp"
-    tags:
-      - always
   - name: Get a list of the packages copied over
     find:
       paths: "/tmp/{{local_kafka_package_path.split('/')[-1]}}"
       patterns: "*.rpm"
     register: rpm_list
-    tags:
-      - always
   - name: Install all of the packages copied over
     become: true
     yum:
@@ -74,19 +70,26 @@
 # directories for Zookeeper and/or Kafka (depending on the role, or roles in the
 # case of a single-node deployment, that each node will be playing in our cluster)
 # and finish by setting up some facts that we'll need later in our playbook
-- name: Create kafka-zookeeper log directory
+- block:
+  - set_fact: log_dir_location="/var/lib"
+  - name: Set fact for the log directory location
+    set_fact: log_dir_location="{{kafka_log_dir}}"
+    when: not (kafka_log_dir is undefined or kafka_log_dir is none or kafka_log_dir | trim == '')
+  tags:
+    - always
+- name: "Create {{log_dir_location}}/zookeeper directory"
   become: true
   file:
-    path: "{{kafka_log_dir}}/zookeeper"
+    path: "{{log_dir_location}}/zookeeper"
     state: directory
     owner: kafka
     group: kafka
   tags:
     - zookeeper
-- name: Create confluent-kafka log directory
+- name: "Create {{log_dir_location}}/kafka directory"
   become: true
   file:
-    path: "{{kafka_log_dir}}/kafka"
+    path: "{{log_dir_location}}/kafka"
     state: directory
     owner: kafka
     group: kafka

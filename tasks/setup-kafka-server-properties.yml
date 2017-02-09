@@ -13,7 +13,7 @@
   lineinfile:
     dest: "{{kafka_config_dir}}/server.properties"
     regexp: "^log.dirs"
-    line: "log.dirs={{kafka_log_dir}}/kafka"
+    line: "log.dirs={{log_dir_location}}/kafka"
   tags:
     - kafka
 - name: Setup host.name for kafka cluster
@@ -67,7 +67,7 @@
   lineinfile:
     dest: "{{kafka_config_dir}}/zookeeper.properties"
     regexp: "^dataDir"
-    line: "dataDir={{kafka_log_dir}}/zookeeper"
+    line: "dataDir={{log_dir_location}}/zookeeper"
   tags:
     - zookeeper
 - name: "Configure the zookeeper cluster timeouts"
@@ -94,7 +94,7 @@
 - name: "Setup the 'myid' file for this zookeeper node"
   become: true
   lineinfile:
-    dest: "{{kafka_log_dir}}/zookeeper/myid"
+    dest: "{{log_dir_location}}/zookeeper/myid"
     create: yes
     regexp: "^[0-9]"
     line: "{{item.0}}"

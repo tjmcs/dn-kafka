@@ -21,7 +21,7 @@
       yum_repository: "{{yum_repo_addr}}"
       tags:
         - always
-      when: yum_repository is defined
+      when: yum_repo_addr is defined
     - role: install-packages
       package_list: "{{combined_package_list}}"
       tags:

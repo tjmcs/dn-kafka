@@ -34,10 +34,17 @@
 # directories for Zookeeper and/or Kafka (depending on the role, or roles in the
 # case of a single-node deployment, that each node will be playing in our cluster)
 # and finish by setting up some facts that we'll need later in our playbook
+- block:
+  - set_fact: log_dir_location="/var/lib"
+  - name: Set fact for the log directory location
+    set_fact: log_dir_location="{{kafka_log_dir}}"
+    when: not (kafka_log_dir is undefined or kafka_log_dir is none or kafka_log_dir | trim == '')
+  tags:
+    - always
 - name: Create apache-zookeeper log directory
   become: true
   file:
-    path: "{{kafka_log_dir}}/zookeeper"
+    path: "{{log_dir_location}}/zookeeper"
     state: directory
     owner: kafka
     group: kafka
@@ -46,7 +53,7 @@
 - name: Create apache-kafka log directory
   become: true
   file:
-    path: "{{kafka_log_dir}}/kafka"
+    path: "{{log_dir_location}}/kafka"
     state: directory
     owner: kafka
     group: kafka

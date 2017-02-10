@@ -55,7 +55,7 @@
       dest: "/tmp"
   - name: Get a list of the packages copied over
     find:
-      paths: "/tmp/{{local_kafka_package_path.split('/')[-1]}}"
+      paths: "/tmp/{{local_kafka_package_path | basename}}"
       patterns: "*.rpm"
     register: rpm_list
   - name: Install all of the packages copied over

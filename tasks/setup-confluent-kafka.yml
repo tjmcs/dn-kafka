@@ -3,15 +3,12 @@
 # First, setup a couple of facts so that can test whether or not a local Confluent
 # repository link was provided and we also know if we're installing Confluent
 # from a local directory on the Ansible node (or not)
-- block:
-  - set_fact:
-      local_confluent_repository: true
-      when: item.key == 'confluent'
-      with_dict: "{{local_repository_keys | default({})}}"
-  - set_fact:
-      install_from_dir: "{{not(local_kafka_package_path is undefined or local_kafka_package_path is none or local_kafka_package_path | trim == '')}}"
-  tags:
-    - always
+- set_fact:
+    local_confluent_repository: true
+    when: item.key == 'confluent'
+    with_dict: "{{local_repository_keys | default({})}}"
+- set_fact:
+    install_from_dir: "{{not(local_kafka_path is undefined or local_kafka_path is none or local_kafka_path | trim == '')}}"
 # if we're not installing confluent from a local directory and either a local repository
 # wasn't specified or a local repository was specified but the key for the confluent packages
 # wasn't found in the list of keys retrieved from that repository, then we should setup our
@@ -31,81 +28,69 @@
       dest: /etc/yum.repos.d/confluent.repo
       mode: 0644
   when: not(install_from_dir) and (local_confluent_repository is undefined or not(local_confluent_repository))
-  tags:
-  - always
 # if we're installing from a repository (either a local repository or the standard
 # Confluent repository), then install the Confluent package from that repository
 - block:
   - name: Install confluent from repository
     yum:
-      name: confluent-platform-oss-2.11
+      name: "{{confluent_package_name}}"
       state: present
     environment: "{{environment_vars}}"
   become: true
   when: not(install_from_dir)
-  tags:
-    - always
 # otherwise, if we're installing from a local directory on the Ansible node
 # that we're running this playbook from, copy over the files from that directory
 # to a temporary directory and and install the Confluent packages from those files
 - block:
   - name: Copy confluent files from a local directory to /tmp on remote machine
     copy:
-      src: "{{local_kafka_package_path}}"
+      src: "{{local_kafka_path}}"
       dest: "/tmp"
-    tags:
-      - always
   - name: Get a list of the packages copied over
     find:
-      paths: "/tmp/{{local_kafka_package_path.split('/')[-1]}}"
+      paths: "/tmp/{{local_kafka_path | basename}}"
       patterns: "*.rpm"
     register: rpm_list
-    tags:
-      - always
   - name: Install all of the packages copied over
     become: true
     yum:
       name: "{{rpm_list.files | map(attribute='path') | list | join(',')}}"
       state: present
   when: install_from_dir
-  tags:
-    - always
 # Now that we've installed the packages that we need, setup the appropriate `log`
-# directories for Zookeeper and/or Kafka (depending on the role, or roles in the
-# case of a single-node deployment, that each node will be playing in our cluster)
-# and finish by setting up some facts that we'll need later in our playbook
-- name: Create kafka-zookeeper log directory
+# directories for Kafka (and for Zookeeper in the case of a single-node deployment);
+# finally, finish by setting up some facts that we'll need later in our playbook
+- set_fact: log_dir_location="/var/lib"
+- name: Set fact for the log directory location
+  set_fact: log_dir_location="{{kafka_data_dir}}"
+  when: not (kafka_data_dir is undefined or kafka_data_dir is none or kafka_data_dir | trim == '')
+- block:
+  - name: "Create {{log_dir_location}}/kafka directory"
+    become: true
+    file:
+      path: "{{log_dir_location}}/kafka"
+      state: directory
+      owner: kafka
+      group: kafka
+  - name: Create /var/log/kafka directory
+    file:
+      path: /var/log/kafka
+      state: directory
+      owner: kafka
+      group: kafka
+  - name: "Create {{log_dir_location}}/zookeeper directory"
+    file:
+      path: "{{log_dir_location}}/zookeeper"
+      state: directory
+      owner: kafka
+      group: kafka
+    when: (zookeeper_nodes | default([])) == []
   become: true
-  file:
-    path: "{{kafka_log_dir}}/zookeeper"
-    state: directory
-    owner: kafka
-    group: kafka
-  tags:
-    - zookeeper
-- name: Create confluent-kafka log directory
-  become: true
-  file:
-    path: "{{kafka_log_dir}}/kafka"
-    state: directory
-    owner: kafka
-    group: kafka
-  tags:
-    - kafka
-- name: Create /var/log/kafka directory
-  become: true
-  file:
-    path: /var/log/kafka
-    state: directory
-    owner: kafka
-    group: kafka
-  tags:
-    - always
-- name: Set values for kafka_bin_dir and kafka_config_dir
+# finally, set values for kafka_bin_dir, kafka_config_dir, kafka_topics_cmd, and
+# schema_registry_config_dir
+- name: Set a few facts that are used later in the playbook
   set_fact:
     kafka_bin_dir: "/usr/bin"
     kafka_config_dir: "/etc/kafka"
     kafka_topics_cmd: "kafka-topics"
     schema_registry_config_dir: "/etc/schema-registry"
-  tags:
-    - always

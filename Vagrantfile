@@ -139,8 +139,8 @@ if !(VALID_KAFKA_DISTROS.include?(options[:kafka_distro]))
     exit 4
 end
 
-local_kafka_dist_dir = ''
-local_kafka_dist_file = ''
+local_kafka_dist_dir = nil
+local_kafka_dist_file = nil
 if options[:local_kafka_dist]
   if options[:kafka_distro] == 'confluent'
     if !File.directory?(options[:local_kafka_dist])
@@ -159,8 +159,8 @@ if options[:local_kafka_dist]
   end
 end
 
-if options[:solr_url] && options[:local_solr_file]
-  print "ERROR; the solr-url option and the local-solr-file options cannot be combined\n"
+if options[:kafka_url] && (local_kafka_dist_dir || local_kafka_dist_file)
+  print "ERROR; the kafka-url option and the local-kafka-dist options cannot be combined\n"
   exit 2
 end
 
@@ -286,10 +286,6 @@ if kafka_addr_array.size > 0
     # trigger the playbook runs for all of the nodes simultaneously using the
     # `site.yml` playbook
     kafka_addr_array.each do |machine_addr|
-      # Customize the amount of memory on the VM
-      config.vm.provider "virtualbox" do |vb|
-        vb.memory = "4096"
-      end
       config.vm.define machine_addr do |machine|
         # setup a private network for this machine
         machine.vm.network "private_network", ip: machine_addr

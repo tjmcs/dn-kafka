@@ -3,6 +3,8 @@
 # first, configure our Kafka server instance by setting up
 # the server.properties file and schema-registry.properties
 # files correctly
+- set_fact:
+    num_hosts: "{{ host_inventory | length }}"
 - block:
   - name: Configure kafka server instance listener address
     replace:
@@ -26,7 +28,7 @@
       regexp: "^broker.id="
       line: "broker.id={{item.0}}"
     with_indexed_items: "{{host_inventory}}"
-    when: "'{{iface_addr}}' == '{{item.1}}'"
+    when: "(num_hosts | int > 1) and ('{{iface_addr}}' == '{{item.1}}')"
   - name: setup confluent-schema-registry listener if deploying a Confluent cluster
     replace:
       dest: "{{schema_registry_config_dir}}/schema-registry.properties"

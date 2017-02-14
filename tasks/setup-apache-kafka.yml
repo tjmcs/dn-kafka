@@ -1,68 +1,77 @@
 # (c) 2016 DataNexus Inc.  All Rights Reserved
 ---
-- name: Download kafka distribution to /tmp
-  become: true
-  get_url:
-    url: "{{kafka_url}}"
-    dest: /tmp
-    mode: 0644
-    validate_certs: no
-  environment: "{{environment_vars}}"
-  tags:
-    - always
-- name: Create "{{kafka_dir}}"
-  become: true
-  file:
-    path: "{{kafka_dir}}"
-    state: directory
-    owner: kafka
-    group: kafka
-  tags:
-    - always
-- name: Unpack kafka distribution into "{{kafka_dir}}"
-  become: true
-  unarchive:
-    copy: no
-    src: "/tmp/kafka_2.11-0.10.1.0.tgz"
-    dest: "{{kafka_dir}}"
-    extra_opts: [ "--strip-components=1" ]
-    owner: kafka
-    group: kafka
-  tags:
-    - always
-# Now that we've installed the packages that we need, setup the appropriate `log`
-# directories for Zookeeper and/or Kafka (depending on the role, or roles in the
-# case of a single-node deployment, that each node will be playing in our cluster)
-# and finish by setting up some facts that we'll need later in our playbook
+# First, setup a fact so that can test whether or not we're installing
+# Fusion from a local directory on the Ansible node (or not)
+- set_fact:
+    install_from_dir: "{{not(local_kafka_file is undefined or local_kafka_file is none or local_kafka_file | trim == '')}}"
+# if we're not installing Kafka from a local directory then we're installing
+# from a repository (either a local repository or the standard Apache Kafka
+# repository)
 - block:
-  - set_fact: log_dir_location="/var/lib"
-  - name: Set fact for the log directory location
-    set_fact: log_dir_location="{{kafka_log_dir}}"
-    when: not (kafka_log_dir is undefined or kafka_log_dir is none or kafka_log_dir | trim == '')
-  tags:
-    - always
-- name: Create apache-zookeeper log directory
+  - name: Download kafka distribution to /tmp
+    become: true
+    get_url:
+      url: "{{kafka_url}}"
+      dest: /tmp
+      mode: 0644
+      validate_certs: no
+    environment: "{{environment_vars}}"
+  - set_fact:
+      local_filename: "{{kafka_url | basename}}"
+  when: not(install_from_dir)
+# otherwise, if we're installing from a local directory on the Ansible node
+# that we're running this playbook from, copy over the files from that directory
+# to a temporary directory and and install the Confluent packages from those files
+- block:
+  - name: Copy confluent files from a local directory to /tmp
+    copy:
+      src: "{{local_kafka_file}}"
+      dest: "/tmp"
+  - set_fact:
+      local_filename: "{{local_kafka_file | basename}}"
+  when: install_from_dir
+# finally, create a directory and unpack the distribution we downloaded into
+# that directory
+- block:
+  - name: Create "{{kafka_dir}}"
+    file:
+      path: "{{kafka_dir}}"
+      state: directory
+      owner: kafka
+      group: kafka
+  - name: Unpack kafka distribution into "{{kafka_dir}}"
+    unarchive:
+      copy: no
+      src: "/tmp/{{local_filename}}"
+      dest: "{{kafka_dir}}"
+      extra_opts: [ "--strip-components=1" ]
+      owner: kafka
+      group: kafka
   become: true
-  file:
-    path: "{{log_dir_location}}/zookeeper"
-    state: directory
-    owner: kafka
-    group: kafka
-  tags:
-    - zookeeper
-- name: Create apache-kafka log directory
+# Now that we've installed the packages that we need, setup the appropriate `log`
+# directories for Kafka (and for Zookeeper in the case of a single-node deployment)
+- set_fact: log_dir_location="/var/lib"
+- name: Set fact for the log directory location
+  set_fact: log_dir_location="{{kafka_data_dir}}"
+  when: not (kafka_data_dir is undefined or kafka_data_dir is none or kafka_data_dir | trim == '')
+- block:
+  - name: Create apache-kafka log directory
+    file:
+      path: "{{log_dir_location}}/kafka"
+      state: directory
+      owner: kafka
+      group: kafka
+  - name: Create apache-zookeeper log directory
+    file:
+      path: "{{log_dir_location}}/zookeeper"
+      state: directory
+      owner: kafka
+      group: kafka
+    when: (zookeeper_nodes | default([])) == []
   become: true
-  file:
-    path: "{{log_dir_location}}/kafka"
-    state: directory
-    owner: kafka
-    group: kafka
-  tags:
-    - kafka
-- name: Set values for kafka_bin_dir and kafka_config_dir
+# finally, set values for kafka_bin_dir, kafka_config_dir, and kafka_topics_cmd
+- name: Set a few facts that are used later in the playbook
   set_fact:
     kafka_bin_dir: "{{kafka_dir}}/bin"
     kafka_config_dir: "{{kafka_dir}}/config"
     kafka_topics_cmd: "{{kafka_dir}}/bin/kafka-topics.sh"
-  tags:
-    - always

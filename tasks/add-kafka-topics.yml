@@ -1,15 +1,11 @@
 # (c) 2016 DataNexus Inc.  All Rights Reserved
 ---
-- name: Choose a zookeeper node
+- name: Choose a zookeeper node from the ZK cluster when defined
   set_fact: zk_node={{(zookeeper_nodes|shuffle).0}}
   when: zookeeper_nodes is defined and zookeeper_nodes != []
-  tags:
-    - kafka
 - name: Set zookeeper node to localhost when not defined
   set_fact: zk_node=localhost
   when: not(zookeeper_nodes is defined and zookeeper_nodes != [])
-  tags:
-    - kafka
 - name: Create kafka topics
   become: true
   become_user: kafka
@@ -19,5 +15,3 @@
   failed_when:
     - "'already exists' not in command_result.stdout"
     - "command_result.rc != 0"
-  tags:
-    - kafka

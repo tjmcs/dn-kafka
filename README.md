@@ -20,6 +20,8 @@ The `site.yml` file at the top-level of this repository pulls in a set of defaul
 application: kafka
 # the distribution of Kafka that should be installed (apache or confluent)
 kafka_distro: confluent
+# the directory where the Kafka logs will be written
+kafka_data_dir: /var/lib
 # the interface Kafka should listen on when running
 kafka_iface: eth0
 # the following parameters are only used when provisioning an instance
@@ -34,9 +36,22 @@ kafka_dir: "/opt/kafka"
 # but is uncommented here so that it can be used if a confluent distribution
 # is chosen when provisioning via Vagrant
 confluent_version: "3.1"
+confluent_package_name: "confluent-platform-oss-2.11"
 # these parameters are used for both confluent and apache distributions
 kafka_topics: ["metrics", "logs"]
 kafka_package_list: ["java-1.8.0-openjdk", "java-1.8.0-openjdk-devel"]
+# used to add extra repositories to the list of repositories in the
+# `local.repo` file that is deployed to a node when we're adding a
+# local repository to use in the provisioning process
+#local_repository_url: http://{{yum_repository}}/local.repo
+#local_repository_extra_keys: http://{{yum_repository}}/local-keys.json
+# used to install kafka from the RPM files in a local directory (when deploying
+# the Confluent Kafka dstribution), if it exists and is not an empty string
+local_kafka_path: ""
+# used to install kafka from the RPM files in a local gzipped tarfile
+# (when deploying the Apache Kafka dstribution), if it exists and is not
+# an empty string
+local_kafka_file: ""
 ```
 
 This default configuration defines default values for all of the parameters needed to deploy an instance of Kafka (both the Apache and the Confluent Kafka distributions are supported) to a node, including defining reasonable defaults for the network interface the Kafka instance should listen ("eth0" by default) and the topics that should automatically be create every Kafka node (the "metrics" and "logs" topics by default).  To deploy Kafka to a node the IP address "192.168.34.8" using the role in this repository (by default the Confluent Kafka distribution will be used), one would simply run a command that looks like this:
@@ -67,6 +82,8 @@ Note that in this case we are overriding the values defined in the `vars/kakfa.y
 application: kafka
 # the distribution of Kafka that should be installed (apache or confluent)
 kafka_distro: apache
+# the directory where the Kafka logs will be written
+kafka_data_dir: /var/lib
 # the interface Kafka should listen on when running
 kafka_iface: eth0
 # the following parameters are only used when provisioning an instance
@@ -81,9 +98,22 @@ kafka_dir: "/opt/kafka"
 # but is uncommented here so that it can be used if a confluent distribution
 # is chosen when provisioning via Vagrant
 confluent_version: "3.1"
+confluent_package_name: "confluent-platform-oss-2.11"
 # these parameters are used for both confluent and apache distributions
 kafka_topics: ["metrics", "logs"]
 kafka_package_list: ["java-1.8.0-openjdk", "java-1.8.0-openjdk-devel"]
+# used to add extra repositories to the list of repositories in the
+# `local.repo` file that is deployed to a node when we're adding a
+# local repository to use in the provisioning process
+#local_repository_url: http://{{yum_repository}}/local.repo
+#local_repository_extra_keys: http://{{yum_repository}}/local-keys.json
+# used to install kafka from the RPM files in a local directory (when deploying
+# the Confluent Kafka dstribution), if it exists and is not an empty string
+local_kafka_path: ""
+# used to install kafka from the RPM files in a local gzipped tarfile
+# (when deploying the Apache Kafka dstribution), if it exists and is not
+# an empty string
+local_kafka_file: ""
 ```
 
 With these changes in place, you could then use the same command (the one shown above for the default, Confluent Kafka distribution) to deploy an instance of the Apache Kafka distribution to that same node:
@@ -105,7 +135,7 @@ A Vagrantfile is included in this repository that can be used to deploy kafka to
 $ vagrant -k="192.168.34.8" -d="apache" up
 ```
 
-Note that the `-k` (or the corresponding `--kafka-addr`) flag must be used to pass an IP address into the Vagrantfile, and this IP address will be used as the IP address of the kafka server that is created by the vagrant command shown above.  In addition, the user *may* define the distribution of Kafka that they wish to deploy to that node using the `-d` (or the corresponding `--distro`) flag.  Valid values for the distribution are either `confluent` (the default) or `apache`.
+Note that the `-k` (or the corresponding `--kafka-list`) flag must be used to pass an IP address into the Vagrantfile, and this IP address will be used as the IP address of the kafka server that is created by the vagrant command shown above.  In addition, the user *may* define the distribution of Kafka that they wish to deploy to that node using the `-d` (or the corresponding `--distro`) flag.  Valid values for the distribution are either `confluent` (the default) or `apache`.
 
 If the Vagrantfile in this repository is being used to deploy the Confluent Kafka distribution to the specified node, then those are the only variables that need to be defined (the Confluent distribution is actually installed as a package, so no additional information is needed).  However, if you are deploying the Apache Kafka distribution to a node there are two additional parameters that must be defined for the playbook to succeed:  the `kafka_dir`, and `kafka_url` parameters.  As was mentioned earlier, default values for these two parameters are defined in the `vars/kafka.yml` file, and this file is pulled into the playbook contained in the `site.yml` file used by the Vagrantfile for provisioning.  As such, the Vagrantfile in this repository can be used (out of the box, so to speak) to deploy either the Confluent or Apache Kafka distributions to a node, without requiring editing of either the Vagrantfile or the `vars/kafka.yml` file.
 

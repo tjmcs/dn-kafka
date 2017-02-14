@@ -21,7 +21,9 @@ class OptionParser
   end
 end
 
+# initialize a few values
 options = {}
+VALID_ZK_ENSEMBLE_SIZES = [3, 5, 7]
 # define an array containg the list of Kafka distributions supported by the
 # underlying playbook used for provisioning
 VALID_KAFKA_DISTROS = ['confluent', 'apache']
@@ -32,20 +34,14 @@ no_ip_commands = ['version', 'global-status', '--help', '-h']
 # vagrant commands that only work for a single IP address
 single_ip_commands = ['status', 'ssh']
 # vagrant command arguments that indicate we are provisioning a cluster (if multiple
-# nodes are supplied via the `--kafka-list` and `--zookeeper-list` flags)
+# nodes are supplied via the `--kafka-list` flag)
 provisioning_command_args = ['up', 'provision']
+no_zk_required_command_args = ['destroy']
 not_provisioning_flag = ['--no-provision']
 
 optparse = OptionParser.new do |opts|
   opts.banner    = "Usage: #{opts.program_name} [options]"
   opts.separator "Options"
-
-  options[:node] = nil
-  opts.on( '-n', '--node ADDR', 'Node address (single-node commands)' ) do |node|
-    # while parsing, trim an '=' prefix character off the front of the string if it exists
-    # (would occur if the value was passed using an option flag like '-n=192.168.1.1')
-    options[:node] = node.gsub(/^=/,'')
-  end
 
   options[:kafka_list] = nil
   opts.on( '-k', '--kafka-list A1,A2[,...]', 'Kafka address list (multi-node commands)' ) do |kafka_list|
@@ -59,12 +55,6 @@ optparse = OptionParser.new do |opts|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
     # (would occur if the value was passed using an option flag like '-z=192.168.1.1')
     options[:zookeeper_list] = zookeeper_list.gsub(/^=/,'')
-  end
-
-  options[:kafka_only] = false
-  opts.on( '-o', '--kafka-only', 'Only provision the kafka nodes (zookeeper nodes should be up)' ) do |kafka_only|
-    # set the option to true if this command-line flag is used
-    options[:kafka_only] = true
   end
 
   options[:kafka_distro] = nil
@@ -88,11 +78,11 @@ optparse = OptionParser.new do |opts|
     options[:kafka_url] = kafka_url.gsub(/^=/,'')
   end
 
-  options[:local_kafka_path] = nil
-  opts.on( '-l', '--local-kafka-path PATH', 'Directory containing Kafka RPMs (Confluent Kafka only)' ) do |local_kafka_path|
+  options[:local_kafka_dist] = nil
+  opts.on( '-l', '--local-kafka-dist PATH', 'Path to directory of RPMs (Confluent) or distribution File (Apache)' ) do |local_kafka_dist|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
     # (would occur if the value was passed using an option flag like '-u=http://localhost/tmp.tgz')
-    options[:local_kafka_path] = local_kafka_path.gsub(/^=/,'')
+    options[:local_kafka_dist] = local_kafka_dist.gsub(/^=/,'')
   end
 
   options[:yum_repo_addr] = nil
@@ -102,11 +92,11 @@ optparse = OptionParser.new do |opts|
     options[:yum_repo_addr] = yum_repo_addr.gsub(/^=/,'')
   end
 
-  options[:kafka_log_dir] = nil
-  opts.on( '-r', '--remote-log-dir LOG_DIR', 'Log directory for Zookeeper/Kafka files' ) do |kafka_log_dir|
+  options[:kafka_data_dir] = nil
+  opts.on( '-r', '--remote-data-dir LOG_DIR', 'Data directory for Kafka files' ) do |kafka_data_dir|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
     # (would occur if the value was passed using an option flag like '-r="/data"')
-    options[:kafka_log_dir] = kafka_log_dir.gsub(/^=/,'')
+    options[:kafka_data_dir] = kafka_data_dir.gsub(/^=/,'')
   end
 
   opts.on_tail( '-h', '--help', 'Display this screen' ) do
@@ -136,30 +126,12 @@ provisioning_command = !((ARGV & provisioning_command_args).empty?) && (ARGV & n
 # and to see if multiple IP addresses are supported (or not) for the
 # command being invoked
 single_ip_command = !((ARGV & single_ip_commands).empty?)
+# and to see if a zookeeper ensemble must also be provided
+no_zk_required_command = !(ARGV & no_zk_required_command_args).empty?
 
 if options[:kafka_url] && !(options[:kafka_url] =~ URI::regexp)
   print "ERROR; input kafka URL '#{options[:kafka_url]}' is not a valid URL\n"
   exit 3
-end
-
-if options[:local_kafka_path] && !File.directory?(options[:local_kafka_path])
-  print "ERROR; input local Kafka path '#{options[:local_kafka_path]}' is not a local directory\n"
-  exit 3
-end
-
-if options[:node] && !(options[:node] =~ Resolv::IPv4::Regex)
-  print "ERROR; input node IP address #{options[:node]} is not a valid IP address\n"
-  exit 3
-end
-
-if options[:node] && (options[:zookeeper_list] || options[:kafka_list])
-  print "ERROR; the node option and the kafka/zookeeper-list options cannot be combined\n"
-  exit 2
-end
-
-if options[:kafka_only] && !options[:kafka_list]
-  print "ERROR; the --kafka-only option can only be used when creating/provisioning kafka nodes\n"
-  exit 2
 end
 
 if !(VALID_KAFKA_DISTROS.include?(options[:kafka_distro]))
@@ -167,95 +139,105 @@ if !(VALID_KAFKA_DISTROS.include?(options[:kafka_distro]))
     exit 4
 end
 
-deployment_addr_hash = {}
-# if we're provisioning or an IP address is (or addresses are) required for this command,
-# then either the `--node` flag should be provided and only contain a single node or the
-# `--kafka_list` and `--zookeeper-list` flags should be used to pass in the addresses for
-# multiple nodes that define a valid definition for the kafka and zookeeper nodes (respectively)
-if provisioning_command || ip_required
-  if single_ip_command
-    if !options[:node]
-      print "ERROR; IP address must be supplied (using the `--node` flag) for this vagrant command\n"
-      exit 1
+local_kafka_dist_dir = ''
+local_kafka_dist_file = ''
+if options[:local_kafka_dist]
+  if options[:kafka_distro] == 'confluent'
+    if !File.directory?(options[:local_kafka_dist])
+      print "ERROR; input local Confluent distribution '#{options[:local_kafka_dist]}' is not a local directory\n"
+      exit 3
+    else
+      local_kafka_dist_dir = options[:local_kafka_dist]
     end
-    deployment_addr_hash['zookeeper'] = options[:node].split(',')
-  elsif options[:kafka_list] && provisioning_command && !options[:zookeeper_list]
-    print "ERROR; for multi-node Kafka provisioning, the `--kafka-list` and `--zookeeper-list`\n"
-    print "       flags must both be used to define the kafka and zookeeper clusters (respectively)\n"
-    exit 5
+  elsif options[:kafka_distro] == 'apache'
+    if !File.file?(options[:local_kafka_dist])
+      print "ERROR; input local Apache distribution '#{options[:local_kafka_dist]}' is not a local file\n"
+      exit 3
+    else
+      local_kafka_dist_file = options[:local_kafka_dist]
+    end
+  end
+end
+
+if options[:solr_url] && options[:local_solr_file]
+  print "ERROR; the solr-url option and the local-solr-file options cannot be combined\n"
+  exit 2
+end
+
+# if we're provisioning, then the `--kafka-list` flag must be provided and either contain
+# a single node (for single-node deployments) or multiple nodes in a comma-separated list
+# (for multi-node deployments) that define a valid kafka cluster
+kafka_addr_array = []
+zookeeper_addr_array = []
+if provisioning_command || ip_required
+  if !options[:kafka_list]
+    print "ERROR; IP address must be supplied (using the `-k, --kafka-list` flag) for this vagrant command\n"
+    exit 1
   else
-    # if we're not executing a single-node command, we can execute the command for the
-    # Zookeeper nodes separately from the Kafka nodes but must supply the IP address for the
-    # nodes in the Zookeeper cluster if we're executing a command for a set of the Kafka nodes;
-    # long story short, the Kafka node IP addresses are optional when executing a multi-node
-    # command but the Zookeeper node IP addresses are required for any multi-node commands
-    # we may be executing
-    kafka_addr_array = []
-    if options[:kafka_list]
-      # check the input kafka address list to ensure that it contains only IP addresses
-      # that it defines a valid cluster of kafka nodes (only clusters made up of an odd
-      # number of members between three and seven are allowed)
-      VALID_CLUSTER_SIZES = [3, 5, 7]
-      kafka_addr_array = options[:kafka_list].split(',').map { |elem| elem.strip }.reject { |elem| elem.empty? }
+    kafka_addr_array = options[:kafka_list].split(',').map { |elem| elem.strip }.reject { |elem| elem.empty? }
+    if kafka_addr_array.size == 1
+      if !(kafka_addr_array[0] =~ Resolv::IPv4::Regex)
+        print "ERROR; input Kafka IP address #{kafka_addr_array[0]} is not a valid IP address\n"
+        exit 2
+      end
+    elsif !single_ip_command
+      # check the input `kafka_addr_array` to ensure that all of the values passed in are
+      # legal IP addresses
       not_ip_addr_list = kafka_addr_array.select { |addr| !(addr =~ Resolv::IPv4::Regex) }
       if not_ip_addr_list.size > 0
         # if some of the values are not valid IP addresses, print an error and exit
         if not_ip_addr_list.size == 1
-          print "ERROR; input kafka IP address #{not_ip_addr_list} is not a valid IP address\n"
+          print "ERROR; input Kafka IP address #{not_ip_addr_list} is not a valid IP address\n"
           exit 2
         else
-          print "ERROR; input kafka IP addresses #{not_ip_addr_list} are not valid IP addresses\n"
+          print "ERROR; input Kafka IP addresses #{not_ip_addr_list} are not valid IP addresses\n"
           exit 2
         end
-      elsif !VALID_CLUSTER_SIZES.include?(kafka_addr_array.size)
-        print "ERROR; only a Kafka cluster with an odd number of elements between 3 and 7 is\n"
-        print "       supported; the defined Kafka cluster (#{kafka_addr_array})\n"
-        print "       contains #{kafka_addr_array.size} elements\n"
-        exit 5
       end
-      deployment_addr_hash['kafka'] = kafka_addr_array
-    end
-    # when provisioning a multi-node Kafka cluster, we **must** have a zookeeper cluster
-    # that contains three nodes (any other topology is not supported, so an error is thrown)
-    zookeeper_addr_array = []
-    if options[:zookeeper_list]
-      zookeeper_addr_array = options[:zookeeper_list].split(',').map { |elem| elem.strip }.reject { |elem| elem.empty? }
-      not_ip_addr_list = zookeeper_addr_array.select { |addr| !(addr =~ Resolv::IPv4::Regex) }
-      if not_ip_addr_list.size > 0
-        # if some of the values are not valid IP addresses, print an error and exit
-        if not_ip_addr_list.size == 1
-          print "ERROR; input zookeeper IP address #{not_ip_addr_list} is not a valid IP address\n"
-          exit 2
+      # when provisioning a multi-node Kafka cluster, we **must** have an associated zookeeper
+      # ensemble consisting of an odd number of nodes greater than three, but less than seven
+      # (any other topology is not supported, so an error is thrown)
+      if kafka_addr_array.size > 1 && !no_zk_required_command
+        if !options[:zookeeper_list]
+          print "ERROR; A set of IP addresses must be supplied (using the `-z, --zookeeper-list` flag)\n"
+          print "       that point to an existing Zookeeper ensemble when provisioning a Kafka cluster\n"
+          exit 1
         else
-          print "ERROR; input zookeeper IP addresses #{not_ip_addr_list} are not valid IP addresses\n"
-          exit 2
+          zookeeper_addr_array = options[:zookeeper_list].split(',').map { |elem| elem.strip }.reject { |elem| elem.empty? }
+          # check the input `zookeeper_addr_array` to ensure that all of the values passed in are
+          # legal IP addresses
+          not_ip_addr_list = zookeeper_addr_array.select { |addr| !(addr =~ Resolv::IPv4::Regex) }
+          if not_ip_addr_list.size > 0
+            # if some of the values are not valid IP addresses, print an error and exit
+            if not_ip_addr_list.size == 1
+              print "ERROR; input Zookeeper IP address #{not_ip_addr_list} is not a valid IP address\n"
+              exit 2
+            else
+              print "ERROR; input Zookeeper IP addresses #{not_ip_addr_list} are not valid IP addresses\n"
+              exit 2
+            end
+          end
+          # and check to make sure that an appropriate number of zookeeper addresses were
+          # passed in (the size of the ensemble should be an odd number between three and seven)
+          if !(VALID_ZK_ENSEMBLE_SIZES.include?(zookeeper_addr_array.size))
+            print "ERROR; only a zookeeper cluster with an odd number of elements between three and\n"
+            print "       seven is supported for multi-node kafka deployments; the defined cluster\n"
+            print "       #{zookeeper_addr_array} contains #{zookeeper_addr_array.size} elements\n"
+            exit 5
+          end
+          # finally, we need to make sure that the machines we're deploying kafka to are not the same
+          # machines that make up our zookeeper ensemble (the zookeeper ensemble must be on a separate
+          # set of machines from the kafka cluster)
+          same_addr_list = zookeeper_addr_array & kafka_addr_array
+          if same_addr_list.size > 0
+            print "ERROR; the kafka cluster cannot be deployed to the same machines that make up\n"
+            print "       the zookeeper ensemble; requested clusters overlap for the machines at\n"
+            print "       #{same_addr_list}\n"
+            exit 7
+          end
         end
-      elsif zookeeper_addr_array.size != 3
-        print "ERROR; only a zookeeper cluster with three elements is supported for multi-node\n"
-        print "       kafka deployments; requested cluster #{zookeeper_addr_array}\n"
-        print "       contains #{zookeeper_addr_array.size} elements\n"
-        exit 5
       end
     end
-    # if we only received a single node for this command, then neither a kafka_list nor
-    # a zookeeper_list were passed in on the command line and we're either creating
-    # or provisioning a VM (or both) for a single-node Kafka deployment; in this case,
-    # simply take the address that was passed in on the command-line using the `--node`
-    # flag and add it to the `zookeeper_addr_array`
-    if options[:node]
-      zookeeper_addr_array = options[:node].split(',')
-    end
-    # if we're here, then we're performing a multi-node kafka deployment with a three-node
-    # zookeeper cluster; we need to make sure that the machines we're deploying kafka and zookeeper
-    # to are not the same machines (the zookeeper cluster must be on a separate set of machines
-    # from the kafka cluster)
-    same_addr_list = zookeeper_addr_array & kafka_addr_array
-    if same_addr_list.size > 0
-      print "ERROR; the zookeeper cluster and kafka cluster cannot be deployed to the same\n"
-      print "       machines; requested clusters overlap for the machines at #{same_addr_list}\n"
-      exit 7
-    end
-    deployment_addr_hash['zookeeper'] = zookeeper_addr_array
   end
 end
 
@@ -270,7 +252,7 @@ end
 # configures the configuration version (we support older styles for
 # backwards compatibility). Please don't change it unless you know what
 # you're doing.
-if deployment_addr_hash['zookeeper']
+if kafka_addr_array.size > 0
   Vagrant.configure("2") do |config|
     proxy = ENV['http_proxy'] || ""
     no_proxy = ENV['no_proxy'] || ""
@@ -298,120 +280,81 @@ if deployment_addr_hash['zookeeper']
     config.vm.box = "centos/7"
     config.vm.box_check_update = false
 
-    # if we're only creating/provisioning kafka nodes, then skip the
-    # `zookeeper` elements of the `deployment_addr_hash`; otherwise create
-    # an address array containing all of the zookeeper and kafka addresses
-    # that were passed in on the command-line (in that order)
-    if options[:kafka_only]
-      all_addr_array = deployment_addr_hash['kafka']
-    else
-      all_addr_array = deployment_addr_hash['zookeeper'] + (deployment_addr_hash['kafka'] || [])
-    end
-
-    # loop through all of the addresses in the `all_addr_array` and, if we're
+    # loop through all of the addresses in the `kafka_addr_array` and, if we're
     # creating VMs, create a VM for each machine; if we're just provisioning the
     # VMs using an ansible playbook, then wait until the last VM in the loop and
     # trigger the playbook runs for all of the nodes simultaneously using the
     # `site.yml` playbook
-    all_addr_array.each do |machine_addr|
+    kafka_addr_array.each do |machine_addr|
+      # Customize the amount of memory on the VM
+      config.vm.provider "virtualbox" do |vb|
+        vb.memory = "4096"
+      end
       config.vm.define machine_addr do |machine|
         # setup a private network for this machine
         machine.vm.network "private_network", ip: machine_addr
+
         # if it's the last node in the list if input addresses, then provision
-        # all of the nodes sumultaneously (if the `--no-provision` flag was not
+        # all of the nodes simultaneously (if the `--no-provision` flag was not
         # set, of course)
-        if machine_addr == all_addr_array[-1]
-          # if the all_addr_array contains a single element, then deploy both
-          # zookeeper and kafka to the same node; otherwise deploy zookeeper to
-          # the nodes in the zookeeper list and kafka to the nodes in the
-          # kafka list (in that order)
-          if all_addr_array.size == 1
-            # deploying a single kafka node; in this case set the deployment
-            # type to 'zookeeper' (so that the right address array will
-            # be pulled out of the deployment_addr_hash, below)
-            deployment_types = ['zookeeper']
-          elsif !deployment_addr_hash['kafka']
-            # if a kafka cluster was not defined, then we're only deploying
-            # a zookeeper cluster
-            deployment_types = ['zookeeper']
-          else
-            # deploying a multi-node zookeeper and kafka cluster
-            deployment_types = ['zookeeper', 'kafka']
-          end
-          # loop over our deployment types and provision each in turn
-          deployment_types.each do |deployment_type|
-            # from the `deployment_addr_hash`, extract the hosts we'll be deploying
-            # to based on the `deployment_type` value
-            deployment_addr_array = deployment_addr_hash[deployment_type]
-            # if it's not a single node deployment and the current deployment_type
-            # is zookeeper and the `--kafka-only` flag was set, skip provisioning
-            # for these zookeeper nodes
-            next if deployment_addr_array.size > 1 && options[:kafka_only] && deployment_type == 'zookeeper'
-            # if the array size is one, then we're deploying to a single kafka node;
-            # in that case we deploy both kafka and zookeeper to the same node
-            if deployment_addr_array.size == 1
-              # since we're deploying zookeeper and kafka on the same node,
-              # we should set our deployment tags to deploy everything to
-              # this single node
-              deployment_tags = ['zookeeper', 'kafka']
-            else
-              # else, we'll be deploying zookeeper, then kafka, on separate
-              # sets of nodes, so tag this deployment according to the type
-              # of node we're deploying this time through the loop
-              deployment_tags = deployment_type
+        if machine_addr == kafka_addr_array[-1]
+          # now, use the playbook in the `site.yml' file to provision our
+          # nodes with kafka (and configure them as a cluster if there
+          # is more than one node)
+          machine.vm.provision "ansible" do |ansible|
+            # set the limit to 'all' in order to provision all of machines on the
+            # list in a single playbook run
+            ansible.limit = "all"
+            ansible.playbook = "site.yml"
+            ansible.extra_vars = {
+              proxy_env: {
+                http_proxy: proxy,
+                no_proxy: no_proxy,
+                proxy_username: proxy_username,
+                proxy_password: proxy_password
+              },
+              kafka_iface: "eth1",
+              kafka_distro: options[:kafka_distro],
+              yum_repo_addr: options[:yum_repo_addr],
+              host_inventory: kafka_addr_array
+            }
+            # if a value was found for `local_kafka_dist_dir`, then pass it into
+            # the playbook as an extra variable, otherwise if a value was found
+            # for `local_kafka_dist_file`, pass that in instead
+            if local_kafka_dist_dir
+              ansible.extra_vars[:local_kafka_path] = local_kafka_dist_dir
+            elsif local_kafka_dist_file
+              ansible.extra_vars[:local_kafka_file] = local_kafka_dist_file
             end
-            # now that we know which nodes we're provisioning and what to tags
-            # we should be using for those nodes, use the playbook in the `site.yml'
-            # file to provision them
-            machine.vm.provision "ansible" do |ansible|
-              # set the limit to 'all' in order to provision all of machines on the
-              # list in a single playbook run
-              ansible.limit = "all"
-              ansible.playbook = "site.yml"
-              ansible.tags = deployment_tags
-              ansible.extra_vars = {
-                proxy_env: {
-                  http_proxy: proxy,
-                  no_proxy: no_proxy,
-                  proxy_username: proxy_username,
-                  proxy_password: proxy_password
-                },
-                kafka_iface: "eth1",
-                kafka_distro: options[:kafka_distro],
-                yum_repo_addr: options[:yum_repo_addr],
-                local_kafka_package_path: options[:local_kafka_path],
-                host_inventory: deployment_addr_array
-              }
-              # if a kafka log directory was set, then set an extra variable
-              # containing the named directory
-              if options[:kafka_log_dir]
-                ansible.extra_vars[:kafka_log_dir] = options[:kafka_log_dir]
+            # if a kafka log directory was set, then set an extra variable
+            # containing the named directory
+            if options[:kafka_data_dir]
+              ansible.extra_vars[:kafka_data_dir] = options[:kafka_data_dir]
+            end
+            # if it's an Apache Kafka deployment, then set the `kafka_url` and
+            # `kafka_path` extra variables, if values for these parameters were
+            # included on the command-line
+            if ansible.extra_vars[:kafka_distro] == "apache"
+              # if defined, set the 'extra_vars[:kafka_url]' value to the value that was passed in on
+              # the command-line (eg. "https://10.0.2.2/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz")
+              if options[:kafka_url]
+                ansible.extra_vars[:kafka_url] = options[:kafka_url]
               end
-              # if it's an Apache Kafka deployment, then set the `kafka_url` and
-              # `kafka_path` extra variables, if values for these parameters were
-              # included on the command-line
-              if ansible.extra_vars[:kafka_distro] == "apache"
-                # if defined, set the 'extra_vars[:kafka_url]' value to the value that was passed in on
-                # the command-line (eg. "https://10.0.2.2/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz")
-                if options[:kafka_url]
-                  ansible.extra_vars[:kafka_url] = options[:kafka_url]
-                end
-                # if defined, set the 'extra_vars[:kafka_dir]' value to the value that was passed in on
-                # the command-line (eg. "/opt/kafka")
-                if options[:kafka_path]
-                  ansible.extra_vars[:kafka_dir] = options[:kafka_path]
-                end
+              # if defined, set the 'extra_vars[:kafka_dir]' value to the value that was passed in on
+              # the command-line (eg. "/opt/kafka")
+              if options[:kafka_path]
+                ansible.extra_vars[:kafka_dir] = options[:kafka_path]
               end
-              # if more than one zookeeper node was passed in, then pass the values
-              # in that hash value through as an extra variable (for use in configuring
-              # the zookeeper cluster and/or kafka cluster)
-              if deployment_addr_hash['zookeeper'].size > 1
-                ansible.extra_vars[:zookeeper_nodes] = deployment_addr_hash['zookeeper']
-              end
-            end     # end `machine.vm.provision "ansible" do |ansible|`
-          end     # end `deployment_tags.each do |deployment_type|`
-        end     # end `if kafka_addr == kafka_addr_array[-1]`
+            end
+            # if a zookeeper list was passed in and we're deploying more than one Kafka,
+            # node, then pass the values in that list through as an extra variable (for
+            # use in configuring the Kafka cluster that we're deploying)
+            if zookeeper_addr_array.size > 1 && kafka_addr_array.size > 1
+              ansible.extra_vars[:zookeeper_nodes] = zookeeper_addr_array
+            end
+          end     # end `machine.vm.provision "ansible" do |ansible|`
+        end     # end `if machine_addr == kafka_addr_array[-1]`
       end     # end `config.vm.define machine_addr do |machine|`
-    end     # end `all_addr_array.each do |machine_addr|`
+    end      # end `kafka_addr_array.each do |machine_addr|`
   end     # end `Vagrant.configure ("2") do |config|`
 end     # end `if kafka_addr_array`

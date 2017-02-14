@@ -8,6 +8,4 @@
 - include: start-kafka-services.yml static=no
 - name: Pausing before creating requested topics
   command: sleep 10
-  tags:
-    - kafka
 - include: add-kafka-topics.yml static=no

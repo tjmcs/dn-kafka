@@ -1,18 +1,15 @@
 # (c) 2016 DataNexus Inc.  All Rights Reserved
 ---
-- name: Enable kafka-zookeeper service on boot
+# if the `zookeeper_nodes` array is not defined then we're
+# performing a single-node deployment and we should enable
+# the local kafka-zookeeper service
+- block:
+  - name: Enable kafka-zookeeper service on boot
+    command: systemctl enable kafka-zookeeper.service
+    when: (zookeeper_nodes | default([])) == []
+  - name: Enable kafka service on boot
+    command: systemctl enable kafka.service
+  - name: Enable confluent-schema-registry service on boot
+    command: systemctl enable confluent-schema-registry.service
+    when: kafka_distro == "confluent"
   become: true
-  command: systemctl enable kafka-zookeeper.service
-  tags:
-    - zookeeper
-- name: Enable kafka service on boot
-  become: true
-  command: systemctl enable kafka.service
-  tags:
-    - kafka
-- name: Enable confluent-schema-registry service on boot
-  become: true
-  command: systemctl enable confluent-schema-registry.service
-  when: kafka_distro == "confluent"
-  tags:
-    - kafka

@@ -1,18 +1,14 @@
 # (c) 2016 DataNexus Inc.  All Rights Reserved
 ---
-- name: Create kafka group
+- block:
+  - name: Create kafka group
+    group:
+      name: kafka
+      system: yes
+  - name: Create kafka user
+    user:
+      name: kafka
+      group: kafka
+      createhome: no
+      system: yes
   become: true
-  group:
-    name: kafka
-    system: yes
-  tags:
-    - always
-- name: Create kafka user
-  become: true
-  user:
-    name: kafka
-    group: kafka
-    createhome: no
-    system: yes
-  tags:
-    - always

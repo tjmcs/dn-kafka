@@ -342,6 +342,11 @@ if kafka_addr_array.size > 0
                 ansible.extra_vars[:kafka_dir] = options[:kafka_path]
               end
             end
+            # if we're deploying a kafka cluster, then pass in the addresses
+            # of all of the nodes using the kafka_nodes extra variable
+            if kafka_addr_array.size > 1
+              ansible.extra_vars[:kafka_nodes] = kafka_addr_array
+            end
             # if a zookeeper list was passed in and we're deploying more than one Kafka,
             # node, then pass the values in that list through as an extra variable (for
             # use in configuring the Kafka cluster that we're deploying)

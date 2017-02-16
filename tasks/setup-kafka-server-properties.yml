@@ -4,7 +4,7 @@
 # the server.properties file and schema-registry.properties
 # files correctly
 - set_fact:
-    num_hosts: "{{ host_inventory | length }}"
+    num_hosts: "{{ (kafka_nodes | default([])) | length }}"
 - block:
   - name: Configure kafka server instance listener address
     replace:
@@ -27,7 +27,7 @@
       dest: "{{kafka_config_dir}}/server.properties"
       regexp: "^broker.id="
       line: "broker.id={{item.0}}"
-    with_indexed_items: "{{host_inventory}}"
+    with_indexed_items: "{{kafka_nodes}}"
     when: "(num_hosts | int > 1) and ('{{iface_addr}}' == '{{item.1}}')"
   - name: setup confluent-schema-registry listener if deploying a Confluent cluster
     replace:

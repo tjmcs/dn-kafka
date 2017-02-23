@@ -5,16 +5,22 @@
 # kafka deployment
 - block:
   - name: Start bundled kafka-zookeeper service
-    command: systemctl start kafka-zookeeper.service
-    when: (zookeeper_nodes | default([])) == []
+    service:
+      name: kafka-zookeeper
+      state: restarted
+    when: (zk_nodes | default([])) == []
   - name: Pause before starting kafka service
     command: sleep 10
   - name: Start kafka service
-    command: systemctl start kafka.service
+    service:
+      name: kafka
+      state: restarted
   - name: Pause before starting confluent-schema-registry service
     command: sleep 10
     when: kafka_distro == "confluent"
   - name: Start confluent-schema-registry service
-    command: systemctl start confluent-schema-registry.service
+    service:
+      name: confluent-schema-registry
+      state: restarted
     when: kafka_distro == "confluent"
   become: true

@@ -5,6 +5,11 @@
 ---
 application: kafka
 
+# used to determine how the inventory is provided by the user (static by
+# default, meaning that the `zookeeper_nodes` and `host_inventory` are passed
+# into the playbook as static lists of hosts)
+inventory_type: static
+
 # the distribution of Kafka that should be installed (apache or confluent)
 kafka_distro: confluent
 
@@ -47,3 +52,6 @@ local_kafka_path: ""
 # (when deploying the Apache Kafka dstribution), if it exists and is not
 # an empty string
 local_kafka_file: ""
+
+# path used to access private keys (defaults to the current working directory)
+private_key_path: "."

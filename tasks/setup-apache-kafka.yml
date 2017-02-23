@@ -23,7 +23,7 @@
 # that we're running this playbook from, copy over the files from that directory
 # to a temporary directory and and install the Confluent packages from those files
 - block:
-  - name: Copy confluent files from a local directory to /tmp
+  - name: Copy apache kafka distribution from a local directory to /tmp
     copy:
       src: "{{local_kafka_file}}"
       dest: "/tmp"
@@ -67,7 +67,7 @@
       state: directory
       owner: kafka
       group: kafka
-    when: (zookeeper_nodes | default([])) == []
+    when: (zk_nodes | default([])) == []
   become: true
 # finally, set values for kafka_bin_dir, kafka_config_dir, and kafka_topics_cmd
 - name: Set a few facts that are used later in the playbook

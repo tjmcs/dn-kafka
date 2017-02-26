@@ -84,7 +84,7 @@
       state: directory
       owner: kafka
       group: kafka
-    when: (zookeeper_nodes | default([])) == []
+    when: (zk_nodes | default([])) == []
   become: true
 # finally, set values for kafka_bin_dir, kafka_config_dir, kafka_topics_cmd, and
 # schema_registry_config_dir

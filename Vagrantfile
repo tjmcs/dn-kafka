@@ -57,6 +57,13 @@ optparse = OptionParser.new do |opts|
     options[:zookeeper_list] = zookeeper_list.gsub(/^=/,'')
   end
 
+  options[:zk_inventory_file] = nil
+  opts.on( '-i', '--zk-inventory-file FILE', 'Zookeeper (Ansible) inventory file' ) do |zk_inventory_file|
+    # while parsing, trim an '=' prefix character off the front of the string if it exists
+    # (would occur if the value was passed using an option flag like '-z=192.168.1.1')
+    options[:zk_inventory_file] = zk_inventory_file.gsub(/^=/,'')
+  end
+
   options[:kafka_distro] = nil
   opts.on( '-d', '--distro DISTRO_NAME', 'Kafka distribution (apache or confluent)') do |kafka_distro|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
@@ -97,6 +104,11 @@ optparse = OptionParser.new do |opts|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
     # (would occur if the value was passed using an option flag like '-r="/data"')
     options[:kafka_data_dir] = kafka_data_dir.gsub(/^=/,'')
+  end
+
+  options[:reset_proxy_settings] = false
+  opts.on( '-c', '--clear-proxy-settings', 'Clear existing proxy settings if no proxy is set' ) do |reset_proxy_settings|
+    options[:reset_proxy_settings] = true
   end
 
   opts.on_tail( '-h', '--help', 'Display this screen' ) do
@@ -161,6 +173,11 @@ end
 
 if options[:kafka_url] && (local_kafka_dist_dir || local_kafka_dist_file)
   print "ERROR; the kafka-url option and the local-kafka-dist options cannot be combined\n"
+  exit 2
+end
+
+if options[:zookeeper_list] && !options[:zk_inventory_file]
+  print "ERROR; the if a zookeeper list is defined, a zookeeper inventory file must also be provided\n"
   exit 2
 end
 
@@ -289,7 +306,6 @@ if kafka_addr_array.size > 0
       config.vm.define machine_addr do |machine|
         # setup a private network for this machine
         machine.vm.network "private_network", ip: machine_addr
-
         # if it's the last node in the list if input addresses, then provision
         # all of the nodes simultaneously (if the `--no-provision` flag was not
         # set, of course)
@@ -302,6 +318,9 @@ if kafka_addr_array.size > 0
             # list in a single playbook run
             ansible.limit = "all"
             ansible.playbook = "site.yml"
+            ansible.groups = {
+              kafka: kafka_addr_array
+            }
             ansible.extra_vars = {
               proxy_env: {
                 http_proxy: proxy,
@@ -312,7 +331,9 @@ if kafka_addr_array.size > 0
               kafka_iface: "eth1",
               kafka_distro: options[:kafka_distro],
               yum_repo_addr: options[:yum_repo_addr],
-              host_inventory: kafka_addr_array
+              host_inventory: kafka_addr_array,
+              reset_proxy_settings: options[:reset_proxy_settings],
+              inventory_type: "static"
             }
             # if a value was found for `local_kafka_dist_dir`, then pass it into
             # the playbook as an extra variable, otherwise if a value was found
@@ -342,16 +363,34 @@ if kafka_addr_array.size > 0
                 ansible.extra_vars[:kafka_dir] = options[:kafka_path]
               end
             end
-            # if we're deploying a kafka cluster, then pass in the addresses
-            # of all of the nodes using the kafka_nodes extra variable
-            if kafka_addr_array.size > 1
-              ansible.extra_vars[:kafka_nodes] = kafka_addr_array
-            end
             # if a zookeeper list was passed in and we're deploying more than one Kafka,
             # node, then pass the values in that list through as an extra variable (for
             # use in configuring the Kafka cluster that we're deploying)
-            if zookeeper_addr_array.size > 1 && kafka_addr_array.size > 1
+            if zookeeper_addr_array.size > 0 && kafka_addr_array.size > 1
               ansible.extra_vars[:zookeeper_nodes] = zookeeper_addr_array
+              # if a zookeeper inventory file was passed in, then read that file
+              # and use the contents to construct an inventory hash to pass into
+              # our playbook
+              zookeeper_inventory = {}
+              zookeeper_inventory_file = options[:zk_inventory_file]
+              File.open(zookeeper_inventory_file, "r") do |file|
+                while (line = file.gets)
+                  split_line = line.split
+                  if split_line.size > 1 && zookeeper_addr_array.include?(split_line[0])
+                    hostname = split_line[0]
+                    inventory_hash = {}
+                    for val in split_line[1..-1]
+                      key,val = val.split('=')
+                      if val
+                        inventory_hash[key.to_sym] = val.delete("'")
+                      end
+                    end
+                    zookeeper_inventory[hostname] = inventory_hash
+                  end
+                end
+                ansible.extra_vars[:zookeeper_inventory] =  zookeeper_inventory
+                ansible.extra_vars[:cloud] = "vagrant"
+              end
             end
           end     # end `machine.vm.provision "ansible" do |ansible|`
         end     # end `if machine_addr == kafka_addr_array[-1]`

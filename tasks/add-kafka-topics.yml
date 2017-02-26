@@ -1,12 +1,13 @@
 # (c) 2016 DataNexus Inc.  All Rights Reserved
 ---
 - name: Choose a zookeeper node from the ZK cluster when defined
-  set_fact: zk_node={{(zookeeper_nodes|shuffle).0}}
-  when: zookeeper_nodes is defined and zookeeper_nodes != []
+  set_fact: zk_node={{(zk_nodes|shuffle).0}}
+  when: zk_nodes is defined and zk_nodes != []
 - name: Set zookeeper node to localhost when not defined
   set_fact: zk_node=localhost
-  when: not(zookeeper_nodes is defined and zookeeper_nodes != [])
+  when: not(zk_nodes is defined and zk_nodes != [])
 - name: Create kafka topics
+  run_once: true
   become: true
   become_user: kafka
   shell: "{{kafka_topics_cmd}} --create --zookeeper {{zk_node}}:2181 --replication-factor 1 --partitions 1 --topic {{ item }}"

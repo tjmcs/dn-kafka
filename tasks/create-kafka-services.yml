@@ -1,6 +1,6 @@
 # (c) 2016 DataNexus Inc.  All Rights Reserved
 ---
-# if the `zookeeper_nodes` array is not defined then we're
+# if the `zk_nodes` array is not defined then we're
 # performing a single-node deployment and we should configure
 # a local kafka-zookeeper service
 - block:
@@ -9,7 +9,7 @@
       src: "../templates/{{kafka_distro}}-zookeeper.j2"
       dest: /etc/systemd/system/kafka-zookeeper.service
       mode: 0644
-    when: (zookeeper_nodes | default([])) == []
+    when: (zk_nodes | default([])) == []
   - name: Create kafka service file
     template:
       src: "../templates/{{kafka_distro}}-kafka.j2"

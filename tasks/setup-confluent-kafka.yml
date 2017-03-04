@@ -46,6 +46,7 @@
     copy:
       src: "{{local_kafka_path}}"
       dest: "/tmp"
+      mode: 0644
   - name: Get a list of the packages copied over
     find:
       paths: "/tmp/{{local_kafka_path | basename}}"

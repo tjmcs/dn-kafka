@@ -92,11 +92,11 @@ optparse = OptionParser.new do |opts|
     options[:local_kafka_dist] = local_kafka_dist.gsub(/^=/,'')
   end
 
-  options[:yum_repo_addr] = nil
-  opts.on( '-y', '--yum-repo-host REPO_HOST', 'Local yum repository hostname/address' ) do |yum_repo_addr|
+  options[:yum_repo_url] = nil
+  opts.on( '-y', '--yum-url URL', 'Local yum repository URL' ) do |yum_repo_url|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
-    # (would occur if the value was passed using an option flag like '-y=192.168.1.128')
-    options[:yum_repo_addr] = yum_repo_addr.gsub(/^=/,'')
+    # (would occur if the value was passed using an option flag like '-y=http://192.168.1.128/centos')
+    options[:yum_repo_url] = yum_repo_url.gsub(/^=/,'')
   end
 
   options[:kafka_data_dir] = nil
@@ -258,10 +258,9 @@ if provisioning_command || ip_required
   end
 end
 
-# if a yum repository address was passed in, check and make sure it's a valid
-# IPv4 address
-if options[:yum_repo_addr] && !(options[:yum_repo_addr] =~ Resolv::IPv4::Regex)
-  print "ERROR; input yum repository address '#{options[:yum_repo_addr]}' is not a valid IP address\n"
+# if a yum repository address was passed in, check and make sure it's a valid URL
+if options[:yum_repo_url] && !(options[:yum_repo_url] =~ URI::regexp)
+  print "ERROR; input yum repository URL '#{options[:yum_repo_url]}' is not a valid URL\n"
   exit 6
 end
 
@@ -304,8 +303,14 @@ if kafka_addr_array.size > 0
     # `site.yml` playbook
     kafka_addr_array.each do |machine_addr|
       config.vm.define machine_addr do |machine|
-        # setup a private network for this machine
-        machine.vm.network "private_network", ip: machine_addr
+        # Create a two private networks, which each allow host-only access to the machine
+        # using a specific IP.
+        if machine_addr
+          config.vm.network "private_network", ip: machine_addr
+          split_addr = machine_addr.split('.')
+          api_addr = (split_addr[0..1] + [(split_addr[2].to_i + 10).to_s] + [split_addr[3]]).join('.')
+          config.vm.network "private_network", ip: api_addr
+        end
         # if it's the last node in the list if input addresses, then provision
         # all of the nodes simultaneously (if the `--no-provision` flag was not
         # set, of course)
@@ -328,9 +333,10 @@ if kafka_addr_array.size > 0
                 proxy_username: proxy_username,
                 proxy_password: proxy_password
               },
-              kafka_iface: "eth1",
+              data_iface: "eth1",
+              api_iface: "eth2",
               kafka_distro: options[:kafka_distro],
-              yum_repo_addr: options[:yum_repo_addr],
+              yum_repo_url: options[:yum_repo_url],
               host_inventory: kafka_addr_array,
               reset_proxy_settings: options[:reset_proxy_settings],
               inventory_type: "static"

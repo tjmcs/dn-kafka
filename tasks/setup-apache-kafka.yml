@@ -27,6 +27,7 @@
     copy:
       src: "{{local_kafka_file}}"
       dest: "/tmp"
+      mode: 0644
   - set_fact:
       local_filename: "{{local_kafka_file | basename}}"
   when: install_from_dir

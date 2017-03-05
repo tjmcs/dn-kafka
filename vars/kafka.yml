@@ -16,8 +16,12 @@ kafka_distro: confluent
 # the directory where the Kafka logs will be written
 kafka_data_dir: /var/lib
 
-# the interface Kafka should listen on when running
-kafka_iface: eth0
+# the names of the interfaces to use for by the Kafka servers; the "data"
+# interface is the private interface that is used to communicate with the
+# (external) Zookeeper ensemble, while the "api" interface is the interface
+# that the Kafka servers listen on for connections from clients
+api_iface: "eth0"
+data_iface: "eth0"
 
 # the following parameters are only used when provisioning an instance
 # of the apache distribution, but are uncommented here (regardless) to

@@ -4,7 +4,7 @@
 # the server.properties file and schema-registry.properties
 # files correctly
 - set_fact:
-    kfka_nodes: "{{kafka_nodes | map('extract', hostvars, [('ansible_' + kafka_iface), 'ipv4', 'address']) | list}}"
+    kfka_nodes: "{{kafka_nodes | map('extract', hostvars, [('ansible_' + data_iface), 'ipv4', 'address']) | list}}"
 - set_fact:
     num_hosts: "{{ kfka_nodes | length }}"
 - block:
@@ -12,7 +12,7 @@
     replace:
       dest: "{{kafka_config_dir}}/server.properties"
       regexp: '^\#(([a-zA-Z]*.?)listeners=PLAINTEXT://).*(:9092)$'
-      replace: '\g<1>{{kafka_addr}}\g<3>'
+      replace: '\g<1>{{api_addr}}\g<3>'
   - name: Configure server to use the defined data directory
     lineinfile:
       dest: "{{kafka_config_dir}}/server.properties"
@@ -22,7 +22,7 @@
     lineinfile:
       dest: "{{kafka_config_dir}}/server.properties"
       regexp: "^host.name="
-      line: "host.name={{kafka_addr}}"
+      line: "host.name={{api_addr}}"
     when: (zk_nodes | default([])) != []
   - name: Setup broker.id if deploying kafka cluster
     lineinfile:
@@ -30,12 +30,12 @@
       regexp: "^broker.id="
       line: "broker.id={{item.0}}"
     with_indexed_items: "{{kfka_nodes}}"
-    when: "(num_hosts | int > 1) and ('{{iface_addr}}' == '{{item.1}}')"
+    when: "(num_hosts | int > 1) and ('{{data_addr}}' == '{{item.1}}')"
   - name: setup confluent-schema-registry listener if deploying a Confluent cluster
     replace:
       dest: "{{schema_registry_config_dir}}/schema-registry.properties"
       regexp: '^(listeners=http://).*(:.*)$'
-      replace: '\g<1>{{kafka_addr}}\g<2>'
+      replace: '\g<1>{{api_addr}}\g<2>'
     when: schema_registry_config_dir is defined and zk_nodes is defined and zk_nodes != []
   - name: setup kafkastore connection URL if deploying a Confluent cluster
     lineinfile:

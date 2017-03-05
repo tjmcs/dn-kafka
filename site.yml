@@ -126,7 +126,7 @@
       run_once: true
 
 # Collect some Zookeeper related facts and determine the "private" IP addresses of
-# the nodes in the Zookeeper ensemble (from their "public" IP addresses and the `kafka_iface`
+# the nodes in the Zookeeper ensemble (from their "public" IP addresses and the `data_iface`
 # variable that was passed in as part of this playbook run) if a list of "public"  Zookeeper
 # IP addresses was passed in.
 - name: Gather facts from Zookeeper host group (if defined)
@@ -149,7 +149,7 @@
   # from our Kafka node(s)
   pre_tasks:
     - set_fact:
-        zk_nodes: "{{zookeeper_nodes | map('extract', hostvars, [('ansible_' + kafka_iface), 'ipv4', 'address']) | list}}"
+        zk_nodes: "{{(zookeeper_nodes | default([])) | map('extract', hostvars, [('ansible_' + data_iface), 'ipv4', 'address']) | list}}"
     - name: Ensure the network interfaces are up on our Kafka node(s)
       service:
         name: network
@@ -161,12 +161,15 @@
   # deploy and configure Kafka
   roles:
     - role: get-iface-addr
-      iface_name: "{{kafka_iface}}"
+      iface_name: "{{data_iface}}"
+      as_fact: "data_addr"
+    - role: get-iface-addr
+      iface_name: "{{api_iface}}"
+      as_fact: "api_addr"
     - role: setup-web-proxy
     - role: add-local-repository
-      yum_repository: "{{yum_repo_addr}}"
-      when: yum_repo_addr is defined
+      yum_repository: "{{yum_repo_url}}"
+      when: yum_repo_url is defined
     - role: install-packages
       package_list: "{{combined_package_list}}"
     - role: dn-kafka
-      kafka_addr: "{{iface_addr}}"

@@ -305,12 +305,7 @@ if kafka_addr_array.size > 0
       config.vm.define machine_addr do |machine|
         # Create a two private networks, which each allow host-only access to the machine
         # using a specific IP.
-        if machine_addr
-          config.vm.network "private_network", ip: machine_addr
-          split_addr = machine_addr.split('.')
-          api_addr = (split_addr[0..1] + [(split_addr[2].to_i + 10).to_s] + [split_addr[3]]).join('.')
-          config.vm.network "private_network", ip: api_addr
-        end
+        machine.vm.network "private_network", ip: machine_addr
         # if it's the last node in the list if input addresses, then provision
         # all of the nodes simultaneously (if the `--no-provision` flag was not
         # set, of course)
@@ -334,12 +329,12 @@ if kafka_addr_array.size > 0
                 proxy_password: proxy_password
               },
               data_iface: "eth1",
-              api_iface: "eth2",
+              api_iface: "eth1",
               kafka_distro: options[:kafka_distro],
               yum_repo_url: options[:yum_repo_url],
               host_inventory: kafka_addr_array,
               reset_proxy_settings: options[:reset_proxy_settings],
-              inventory_type: "static"
+              cloud: "vagrant"
             }
             # if a value was found for `local_kafka_dist_dir`, then pass it into
             # the playbook as an extra variable, otherwise if a value was found

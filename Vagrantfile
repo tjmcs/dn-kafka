@@ -79,14 +79,14 @@ optparse = OptionParser.new do |opts|
   end
 
   options[:kafka_url] = nil
-  opts.on( '-u', '--url KAFKA_URL', 'URL for distribution (Apache Kafka only)' ) do |kafka_url|
+  opts.on( '-u', '--url KAFKA_URL', 'URL of distribution file (Apache) or RPM bundle (Confluent)' ) do |kafka_url|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
     # (would occur if the value was passed using an option flag like '-u=http://localhost/tmp.tgz')
     options[:kafka_url] = kafka_url.gsub(/^=/,'')
   end
 
   options[:local_kafka_dist] = nil
-  opts.on( '-l', '--local-kafka-dist PATH', 'Path to directory of RPMs (Confluent) or distribution File (Apache)' ) do |local_kafka_dist|
+  opts.on( '-l', '--local-kafka-dist PATH', 'Path to distribution file (Apache) or directory of RPMs (Confluent)' ) do |local_kafka_dist|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
     # (would occur if the value was passed using an option flag like '-u=http://localhost/tmp.tgz')
     options[:local_kafka_dist] = local_kafka_dist.gsub(/^=/,'')
@@ -172,7 +172,7 @@ if options[:local_kafka_dist]
 end
 
 if options[:kafka_url] && (local_kafka_dist_dir || local_kafka_dist_file)
-  print "ERROR; the kafka-url option and the local-kafka-dist options cannot be combined\n"
+  print "ERROR; the kafka_url option and the local_kafka_dist options cannot be combined\n"
   exit 2
 end
 
@@ -349,20 +349,16 @@ if kafka_addr_array.size > 0
             if options[:kafka_data_dir]
               ansible.extra_vars[:kafka_data_dir] = options[:kafka_data_dir]
             end
-            # if it's an Apache Kafka deployment, then set the `kafka_url` and
-            # `kafka_path` extra variables, if values for these parameters were
-            # included on the command-line
-            if ansible.extra_vars[:kafka_distro] == "apache"
-              # if defined, set the 'extra_vars[:kafka_url]' value to the value that was passed in on
-              # the command-line (eg. "https://10.0.2.2/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz")
-              if options[:kafka_url]
-                ansible.extra_vars[:kafka_url] = options[:kafka_url]
-              end
-              # if defined, set the 'extra_vars[:kafka_dir]' value to the value that was passed in on
-              # the command-line (eg. "/opt/kafka")
-              if options[:kafka_path]
-                ansible.extra_vars[:kafka_dir] = options[:kafka_path]
-              end
+            # if defined, set the 'extra_vars[:kafka_url]' value to the value that was passed in on
+            # the command-line (eg. "https://10.0.2.2/dist/kafka/0.10.1.0/kafka_2.11-0.10.1.0.tgz")
+            if options[:kafka_url]
+              ansible.extra_vars[:kafka_url] = options[:kafka_url]
+            end
+            # if it's an Apache Kafka deployment and the 'kafka_path' was passed in on the
+            # command line, then set the 'extra_vars[:kafka_dir]' value to that value
+            # (eg. "/opt/kafka")
+            if ansible.extra_vars[:kafka_distro] == "apache" && options[:kafka_path]
+              ansible.extra_vars[:kafka_dir] = options[:kafka_path]
             end
             # if a zookeeper list was passed in and we're deploying more than one Kafka,
             # node, then pass the values in that list through as an extra variable (for

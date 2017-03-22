@@ -48,8 +48,6 @@
   # interfaces on the Kafka node(s) are up by restarting the network, then gather the facts
   # from our Kafka node(s)
   pre_tasks:
-    - set_fact:
-        zk_nodes: "{{(zookeeper_nodes | default([])) | map('extract', hostvars, [('ansible_' + data_iface), 'ipv4', 'address']) | list}}"
     - name: Ensure the network interfaces are up on our Kafka node(s)
       service:
         name: network
@@ -57,6 +55,30 @@
       become: true
     - name: Gather facts from the Kafka node(s)
       setup:
+    # next, we obtain the interface names for our data_iface
+    # and api_iface (provided an interface description was provided for each)
+    - include_role:
+        name: get-iface-names
+      vars:
+        iface_descriptions: "{{iface_description_array}}"
+      when: not (iface_description_array is undefined or iface_description_array == [])
+    # and now that we know we have our data_iface identified, we can construct
+    # the list of zk_nodes (the data_iface IP addresses of our zookeeper_nodes)
+    - set_fact:
+        zk_nodes: "{{(zookeeper_nodes | default([])) | map('extract', hostvars, [('ansible_' + data_iface), 'ipv4', 'address']) | list}}"
+    # if we're provisioning a RHEL machine, then we need to ensure that
+    # it's subscribed before we can install anything (if it hasn't been
+    # registered already, of course, if that's the case then we can skip
+    # this step)
+    - block:
+      - redhat_subscription:
+          state: present
+          username: "{{rhel_username}}"
+          password: "{{rhel_password}}"
+          consumer_id: "{{rhel_consumer_id}}"
+        become: true
+        when: rhel_username is defined and rhel_password is defined and rhel_consumer_id is defined
+      when: ansible_distribution == 'RedHat'
   # Now that we have all of the facts we need, we can run the roles that are used to
   # deploy and configure Kafka
   roles:

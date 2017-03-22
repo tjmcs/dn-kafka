@@ -42,17 +42,15 @@
     - vars/kafka.yml
   vars:
     - combined_package_list: "{{ (default_packages|default([])) | union(kafka_package_list) | union((install_packages_by_tag|default({})).kafka|default([])) }}"
-  # First, determine what the "private" IP addresses of the Zookeeper ensemble are from
-  # the "public" IP addresses that were passed in for this ensemble and the interface name
-  # that we'll be configuring Kafka to listen on.  Once that's done, ensure that all of the
-  # interfaces on the Kafka node(s) are up by restarting the network, then gather the facts
-  # from our Kafka node(s)
+  # First, restart the network (unless the skip_network_restart was set)
+  # and gather some facts about our Kafka node(s)
   pre_tasks:
     - name: Ensure the network interfaces are up on our Kafka node(s)
       service:
         name: network
         state: restarted
       become: true
+      when: not (skip_network_restart is defined or skip_network_restart)
     - name: Gather facts from the Kafka node(s)
       setup:
     # next, we obtain the interface names for our data_iface

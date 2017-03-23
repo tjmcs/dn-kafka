@@ -42,12 +42,6 @@ confluent_package_name: "confluent-platform-oss-2.11"
 kafka_topics: ["metrics", "logs"]
 kafka_package_list: ["java-1.8.0-openjdk", "java-1.8.0-openjdk-devel"]
 
-# used to add extra repositories to the list of repositories in the
-# `local.repo` file that is deployed to a node when we're adding a
-# local repository to use in the provisioning process
-#local_repository_url: http://{{yum_repository}}/local.repo
-#local_repository_extra_keys: http://{{yum_repository}}/local-keys.json
-
 # used to install kafka from the RPM files in a local directory (when deploying
 # the Confluent Kafka dstribution), if it exists and is not an empty string
 local_kafka_path: ""

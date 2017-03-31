@@ -20,11 +20,6 @@
           - { name: zookeeper, inventory: "{{zookeeper_inventory | default({})}}", node_list: "{{zookeeper_nodes | default([])}}" }
       when: cloud == "vagrant"
 
-# Collect some Zookeeper related facts
-- name: Gather facts from Zookeeper host group (if defined)
-  hosts: zookeeper
-  tasks: []
-
 # Collect some Zookeeper related facts and determine the "private" IP addresses of
 # the nodes in the Zookeeper ensemble (from their "public" IP addresses and the `data_iface`
 # variable that was passed in as part of this playbook run) if a list of "public"  Zookeeper

@@ -88,7 +88,7 @@ optparse = OptionParser.new do |opts|
   options[:local_kafka_dist] = nil
   opts.on( '-l', '--local-kafka-dist PATH', 'Path to distribution file (Apache) or directory of RPMs (Confluent)' ) do |local_kafka_dist|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
-    # (would occur if the value was passed using an option flag like '-u=http://localhost/tmp.tgz')
+    # (would occur if the value was passed using an option flag like '-l=/tmp/tmp.tgz')
     options[:local_kafka_dist] = local_kafka_dist.gsub(/^=/,'')
   end
 

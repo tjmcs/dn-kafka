@@ -65,7 +65,7 @@ optparse = OptionParser.new do |opts|
   end
 
   options[:kafka_distro] = nil
-  opts.on( '-d', '--distro DISTRO_NAME', 'Kafka distribution (apache or confluent)') do |kafka_distro|
+  opts.on( '-n', '--kafka-distro DISTRO_NAME', 'Kafka distribution (apache or confluent)') do |kafka_distro|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
     # (would occur if the value was passed using an option flag like '-d=apache')
     options[:kafka_distro] = kafka_distro.gsub(/^=/,'')
@@ -100,7 +100,7 @@ optparse = OptionParser.new do |opts|
   end
 
   options[:kafka_data_dir] = nil
-  opts.on( '-r', '--remote-data-dir LOG_DIR', 'Data directory for Kafka files' ) do |kafka_data_dir|
+  opts.on( '-d', '--data PATH', 'Path where Kafka will store its data' ) do |kafka_data_dir|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
     # (would occur if the value was passed using an option flag like '-r="/data"')
     options[:kafka_data_dir] = kafka_data_dir.gsub(/^=/,'')
@@ -214,7 +214,7 @@ if provisioning_command || ip_required
       # when provisioning a multi-node Kafka cluster, we **must** have an associated zookeeper
       # ensemble consisting of an odd number of nodes greater than three, but less than seven
       # (any other topology is not supported, so an error is thrown)
-      if kafka_addr_array.size > 1 && !no_zk_required_command
+      if provisioning_command && kafka_addr_array.size > 1 && !no_zk_required_command
         if !options[:zookeeper_list]
           print "ERROR; A set of IP addresses must be supplied (using the `-z, --zookeeper-list` flag)\n"
           print "       that point to an existing Zookeeper ensemble when provisioning a Kafka cluster\n"

@@ -106,6 +106,13 @@ optparse = OptionParser.new do |opts|
     options[:kafka_data_dir] = kafka_data_dir.gsub(/^=/,'')
   end
 
+  options[:local_vars_file] = nil
+  opts.on( '-f', '--local-vars-file FILE', 'Local variables file' ) do |local_vars_file|
+    # while parsing, trim an '=' prefix character off the front of the string if it exists
+    # (would occur if the value was passed using an option flag like '-f=/tmp/local-vars-file.yml')
+    options[:local_vars_file] = local_vars_file.gsub(/^=/,'')
+  end
+
   options[:reset_proxy_settings] = false
   opts.on( '-c', '--clear-proxy-settings', 'Clear existing proxy settings if no proxy is set' ) do |reset_proxy_settings|
     options[:reset_proxy_settings] = true
@@ -179,6 +186,12 @@ end
 if options[:zookeeper_list] && !options[:zk_inventory_file]
   print "ERROR; the if a zookeeper list is defined, a zookeeper inventory file must also be provided\n"
   exit 2
+end
+
+# if a local variables file was passed in, check and make sure it's a valid filename
+if options[:local_vars_file] && !File.file?(options[:local_vars_file])
+  print "ERROR; input local variables file '#{options[:local_vars_file]}' is not a local file\n"
+  exit 3
 end
 
 # if we're provisioning, then the `--kafka-list` flag must be provided and either contain
@@ -359,6 +372,11 @@ if kafka_addr_array.size > 0
             # (eg. "/opt/kafka")
             if ansible.extra_vars[:kafka_distro] == "apache" && options[:kafka_path]
               ansible.extra_vars[:kafka_dir] = options[:kafka_path]
+            end
+            # if defined, set the 'extra_vars[:local_vars_file]' value to the value that was passed in
+            # on the command-line (eg. "/tmp/local-vars-file.yml")
+            if options[:local_vars_file]
+              ansible.extra_vars[:local_vars_file] = options[:local_vars_file]
             end
             # if a zookeeper list was passed in and we're deploying more than one Kafka,
             # node, then pass the values in that list through as an extra variable (for

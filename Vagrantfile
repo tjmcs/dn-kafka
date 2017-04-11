@@ -65,7 +65,7 @@ optparse = OptionParser.new do |opts|
   end
 
   options[:kafka_distro] = nil
-  opts.on( '-d', '--distro DISTRO_NAME', 'Kafka distribution (apache or confluent)') do |kafka_distro|
+  opts.on( '-n', '--kafka-distro DISTRO_NAME', 'Kafka distribution (apache or confluent)') do |kafka_distro|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
     # (would occur if the value was passed using an option flag like '-d=apache')
     options[:kafka_distro] = kafka_distro.gsub(/^=/,'')
@@ -100,10 +100,17 @@ optparse = OptionParser.new do |opts|
   end
 
   options[:kafka_data_dir] = nil
-  opts.on( '-r', '--remote-data-dir LOG_DIR', 'Data directory for Kafka files' ) do |kafka_data_dir|
+  opts.on( '-d', '--data PATH', 'Path where Kafka will store its data' ) do |kafka_data_dir|
     # while parsing, trim an '=' prefix character off the front of the string if it exists
     # (would occur if the value was passed using an option flag like '-r="/data"')
     options[:kafka_data_dir] = kafka_data_dir.gsub(/^=/,'')
+  end
+
+  options[:local_vars_file] = nil
+  opts.on( '-f', '--local-vars-file FILE', 'Local variables file' ) do |local_vars_file|
+    # while parsing, trim an '=' prefix character off the front of the string if it exists
+    # (would occur if the value was passed using an option flag like '-f=/tmp/local-vars-file.yml')
+    options[:local_vars_file] = local_vars_file.gsub(/^=/,'')
   end
 
   options[:reset_proxy_settings] = false
@@ -181,6 +188,12 @@ if options[:zookeeper_list] && !options[:zk_inventory_file]
   exit 2
 end
 
+# if a local variables file was passed in, check and make sure it's a valid filename
+if options[:local_vars_file] && !File.file?(options[:local_vars_file])
+  print "ERROR; input local variables file '#{options[:local_vars_file]}' is not a local file\n"
+  exit 3
+end
+
 # if we're provisioning, then the `--kafka-list` flag must be provided and either contain
 # a single node (for single-node deployments) or multiple nodes in a comma-separated list
 # (for multi-node deployments) that define a valid kafka cluster
@@ -214,7 +227,7 @@ if provisioning_command || ip_required
       # when provisioning a multi-node Kafka cluster, we **must** have an associated zookeeper
       # ensemble consisting of an odd number of nodes greater than three, but less than seven
       # (any other topology is not supported, so an error is thrown)
-      if kafka_addr_array.size > 1 && !no_zk_required_command
+      if provisioning_command && kafka_addr_array.size > 1 && !no_zk_required_command
         if !options[:zookeeper_list]
           print "ERROR; A set of IP addresses must be supplied (using the `-z, --zookeeper-list` flag)\n"
           print "       that point to an existing Zookeeper ensemble when provisioning a Kafka cluster\n"
@@ -359,6 +372,11 @@ if kafka_addr_array.size > 0
             # (eg. "/opt/kafka")
             if ansible.extra_vars[:kafka_distro] == "apache" && options[:kafka_path]
               ansible.extra_vars[:kafka_dir] = options[:kafka_path]
+            end
+            # if defined, set the 'extra_vars[:local_vars_file]' value to the value that was passed in
+            # on the command-line (eg. "/tmp/local-vars-file.yml")
+            if options[:local_vars_file]
+              ansible.extra_vars[:local_vars_file] = options[:local_vars_file]
             end
             # if a zookeeper list was passed in and we're deploying more than one Kafka,
             # node, then pass the values in that list through as an extra variable (for

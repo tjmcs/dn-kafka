@@ -1,16 +1,16 @@
 # Example deployment scenarios
 
-There are a four basic deployment scenarios that are supported by this playbook. In the first two scenariols (shown below) we'll walk through the deployment of Kafka to a single node and the deployment of a multi-node Kafka cluster using a static inventory file, discussing the differences between the deployment mechanisms used for the two distributions supported by this playbook (the [Confluent Kafka](https://www.confluent.io/) distribution and the [Apache Kafka](https://kafka.apache.org/) distribution) as we go. Finally, in the third scenario, we will show how the same multi-node Kafka cluster deployment shown in the second scenario could be performed using the dynamic inventory scripts for both AWS and OpenStack instead of a static inventory file.
+There are a three basic deployment scenarios that are supported by this playbook. In the first two scenarios (shown below) we'll walk through the deployment of Kafka to a single node and the deployment of a multi-node Kafka cluster using a static inventory file, discussing the differences between the deployment mechanisms used for the two distributions supported by this playbook (the [Confluent Kafka](https://www.confluent.io/) distribution and the [Apache Kafka](https://kafka.apache.org/) distribution) as we go. Finally, in the third scenario, we will show how the same multi-node Kafka cluster deployment shown in the second scenario could be performed using the dynamic inventory scripts for both AWS and OpenStack instead of a static inventory file.
 
 ## Scenario #1: deploying Kafka to a single node
 While this is the simplest of the deployment scenarios that are supported by this playbook, it is more than likely that deployment of Kafka to a single node is really only only useful for very small workloads or deployments of simple test environments. Nevertheless, we will start our discussion with this deployment scenario since it is the simplest.
 
-If we want to deploy the either of the two supported Kafka distributions to a single node with the IP address "192.168.34.22", we would start by creating a very simple inventory file that looks something like the following:
+If we want to deploy the either of the two supported Kafka distributions to a single node with the IP address "192.168.34.2", we would start by creating a very simple inventory file that looks something like the following:
 
 ```bash
 $ cat single-node-inventory
 
-192.168.34.22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/test_node_private_key'
+192.168.34.2 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/test_node_private_key'
 
 $ 
 ```
@@ -20,7 +20,7 @@ Note that in this inventory file the `ansible_ssh_host` and `ansible_ssh_port` p
 Once we've built our static inventory file, we need to decide which Kafka distribution we want to deploy to our node. For purposes of this example, let's assume that we want to deploy the Confluent distribution (the default). To deploy the Confluent Kafka distribution to our single node, we would simply run an `ansible-playbook` command that looks something like this:
 
 ```bash
-$ ansible-playbook -i single-node-inventory -e "{ host_inventory: ['192.168.34.22'] }" site.yml
+$ ansible-playbook -i single-node-inventory -e "{ host_inventory: ['192.168.34.2'] }" site.yml
 ```
 
 This will install the Confluent Kafka distribution as a set of packages, using the default package repository that is defined in the [templates/confluent-repo.j2](../templates/confluent-repo.j2) template, and configure the node as a single-node Kafka instance (using the default configuration parameters that are defined in the [vars/kafka.yml](../vars/kafka.yml) file). It should be noted here that When deploying a single-node Kafka instance, regardless of the distribution, an instance of Zookeeper will also be deployed locally on the same node. The Kafka instance will then be configured to work with that bundled Zookeeper instance.
@@ -28,7 +28,7 @@ This will install the Confluent Kafka distribution as a set of packages, using t
 If we wanted to deploy the Apache Kafka distribution to our node instead of the Confluent Kafka distribution, we could simply modify the `kafka_distro` flag that is passed into the playbook (either by modifying the value defined in the [vars/kafka.yml](../vars/kafka.yml) file or by passing in an extra variable that redefines the value from it's default value of `confluent`). If we take the second approach, this is what the `ansible-playbook` command for this simple deployment would look like:
 
 ```bash
-$ ansible-playbook -i single-node-inventory -e "{ host_inventory: ['192.168.34.22'], \
+$ ansible-playbook -i single-node-inventory -e "{ host_inventory: ['192.168.34.2'], \
     kafka_distro: 'apache' }" site.yml
 ```
 
@@ -37,7 +37,7 @@ This command will download the Apache Kafka distribution from the default URL de
 Regardless of which distribution is deployed, when the playbook run is complete and the `zookeeper` and `kafka` services are up and running on the host, two topics will be created on the node by default, the `metrics` and `logs` topics. The names of the topics created can be modified by changing the `kafka_topics` value that is defined in the [vars/kafka.yml](../vars/kafka.yml) file or by passing a `kafka_topics` list into the `ansible-playbook` command as an extra variable (and, of course, passing in an empty list will result in no topics being created during the playbook run).
 
 ## Scenario #2: deploying a multi-node Kafka cluster
-If you are using this playbook to deploy a multi-node Kafka cluster, then the configuration becomes a bit more complicated. The playbook assumes that if you are deploying a Kafka cluster you will also want to have a multi-node Zookeeper ensemble associated with that cluster. Furthermore, to ensure that the resulting pair of clusters are relatively tolerant of the failure of a node, we highly recommend that the deployments of these two clusters (the Kafka cluster and the Zookeeper ensemble) be made to separate sets of nodes. For the playbook in this repository, this separation of the Zookeeper ensemble from the Kakfa cluster is made by assuming that in deploying a Kafka cluster we will be configuring the nodes of that cluster to work with a multi-node Zookeeper ensemble that has **already been deployed and configured separately** (and we provide a separate role and playbook, both of which are defined in the DataNexus [dn-zookeeper] (https://github.com/DataNexus/dn-zookeeper) repository, that can be used to manage the process of deploying and configuring the necessary Zookeeper ensemble).
+If you are using this playbook to deploy a multi-node Kafka cluster, then the configuration becomes a bit more complicated. The playbook assumes that if you are deploying a Kafka cluster you will also want to have a multi-node Zookeeper ensemble associated with that cluster. Furthermore, to ensure that the resulting pair of clusters are relatively tolerant of the failure of a node, we highly recommend that the deployments of these two clusters (the Kafka cluster and the Zookeeper ensemble) be made to separate sets of nodes. For the playbook in this repository, this separation of the Zookeeper ensemble from the Kafka cluster is made by assuming that in deploying a Kafka cluster we will be configuring the nodes of that cluster to work with a multi-node Zookeeper ensemble that has **already been deployed and configured separately** (and we provide a separate role and playbook, both of which are defined in the DataNexus [dn-zookeeper] (https://github.com/DataNexus/dn-zookeeper) repository, that can be used to manage the process of deploying and configuring the necessary Zookeeper ensemble).
 
 So, assuming that we've already deployed a three-node Zookeeper ensemble separately and that we want to deploy a three node Confluent Kafka cluster (other than the difference in the `kafka_distro` value used in the `ansible-playbook` command, the deployment of an Apache Kafka cluster will look exactly the same), let's walk through what the commands that we'll need to run look like. In addition, let's assume that we're going to be using a static inventory file to control our Kafka deployment. The static inventory file that we will be using for this example looks like this:
 
@@ -52,7 +52,7 @@ $ cat test-cluster-inventory
 $
 ```
 
-To correctly configure our Kakfa cluster to talk to the Zookeeper ensemble, the playbook will need to connect to the nodes that make up the associated Zookeeper ensemble and collect information from them, and to do so we'll have to pass in the information that Ansible will need to make those connections to the playbook. We do this by passing in a separate hash of hashes (the `zookeeper_inventory` for the deployment) that maps the same parameters shown above to each of the members of our Zookeeper ensemble. For the purposes of this example, let's assume that our `zookeeper_inventory` hash map looks something like this:
+To correctly configure our Kafka cluster to talk to the Zookeeper ensemble, the playbook will need to connect to the nodes that make up the associated Zookeeper ensemble and collect information from them, and to do so we'll have to pass in the information that Ansible will need to make those connections to the playbook. We do this by passing in a separate hash of hashes (the `zookeeper_inventory` for the deployment) that maps the same parameters shown above to each of the members of our Zookeeper ensemble. For the purposes of this example, let's assume that our `zookeeper_inventory` hash map looks something like this:
 
 ```json
     {
@@ -82,6 +82,46 @@ $ ansible-playbook -i test-cluster-inventory -e "{ \
       }, \
       kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz', \
       yum_repo_url: 'http://192.168.34.254/centos', kafka_data_dir: '/data' \
+    }" site.yml
+```
+
+Alternatively, rather than passing all of those arguments in on the command-line as extra variables, we can make use of the *local variables file* support that is built into this playbook and construct a YAML file that looks something like this containing the configuration parameters that are being used for this deployment:
+
+```yaml
+cloud: vagrant
+data_iface: eth0
+api_iface: eth1
+zookeeper_nodes:
+    - '192.168.34.18'
+    - '192.168.34.19'
+    - '192.168.34.20'
+zookeeper_inventory:
+    '192.168.34.18':
+        ansible_ssh_host: '192.168.34.18'
+        ansible_ssh_port: 22
+        ansible_ssh_user: 'cloud-user'
+        ansible_ssh_private_key_file: 'keys/zk_cluster_private_key'
+    '192.168.34.19':
+        ansible_ssh_host: '192.168.34.19'
+        ansible_ssh_port: 22
+        ansible_ssh_user: 'cloud-user'
+        ansible_ssh_private_key_file: 'keys/zk_cluster_private_key'
+    '192.168.34.20':
+        ansible_ssh_host: '192.168.34.20'
+        ansible_ssh_port: 22
+        ansible_ssh_user: 'cloud-user'
+        ansible_ssh_private_key_file: 'keys/zk_cluster_private_key'
+kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz'
+kafka_data_dir: 'http://192.168.34.254/centos'
+solr_data_dir: '/data'
+```
+
+and then we can pass in the *local variables file* as an argument to the `ansible-playbook` command; assuming the YAML file shown above was in the current working directory and was named `test-cluster-deployment-params.yml`, the resulting command would look somethin like this:
+
+```bash
+$ ansible-playbook -i test-cluster-inventory -e "{ \
+      host_inventory: ['192.168.34.8', '192.168.34.9', '192.168.34.10'], \
+      local_vars_file: 'test-cluster-deployment-params.yml' \
     }" site.yml
 ```
 
@@ -137,12 +177,12 @@ $ ansible-playbook -i common-utils/inventory/osp/openstack -e "{ \
 
 The playbook then uses the tags in this playbook run to identify the nodes that make up the associated Zookeeper ensemble (which must be up and running for this playbook command to work) as well as the target nodes for the playbook run, installs the Confluent Kafka distribution on those nodes, and configures them as a new Kafka cluster. 
 
-In an AWS environment, the commands look quite similar; the command used for the first pass (provisioning the seed nodes in the cluster) would look something like this:
+In an AWS environment, the command would look something like this:
 
 ```bash
 $ ansible-playbook -i common-utils/inventory/aws/ec2 -e "{ \
         host_inventory: 'tag_Application_kafka:&tag_Cloud_aws:&tag_Tenant_labs:&tag_Project_projectx:&tag_Domain_preprod', \
-        application: kafka, cloud: osp, tenant: labs, project: projectx, domain: preprod, \
+        application: kafka, cloud: aws, tenant: labs, project: projectx, domain: preprod, \
         ansible_user: cloud-user, private_key_path: './keys', data_iface: eth0, api_iface: eth1, \
         kafka_data_dir: '/data' \
     }" site.yml

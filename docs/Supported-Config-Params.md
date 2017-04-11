@@ -10,7 +10,7 @@ In addition to the defaults defined in the [vars/kafka.yml](../vars/kafka.yml) f
 Each of these sets of parameters are described in their own section, below.
 
 ## Parameters used to control the playbook run
-The following parameters can be used to control the `ansible-playbook` run itself, defining things like how Ansible should connect to the nodes involved in the playbook run, which nodes should be targeted, where the Kafka distribution should be downloaded from, which packages must be installed during the deployment process, and where tose packages should be obtained from:
+The following parameters can be used to control the `ansible-playbook` run itself, defining things like how Ansible should connect to the nodes involved in the playbook run, which nodes should be targeted, where the Kafka distribution should be downloaded from, which packages must be installed during the deployment process, and where those packages should be obtained from:
 
 * **`ansible_ssh_private_key_file`**: the location of the private key that should be used when connecting to the target nodes via SSH; this parameter is useful when there is one private key that is used to connect to all of the target nodes in a given playbook run
 * **`ansible_user`**: the username that should be used when connecting to the target nodes via SSH; is useful if the same username is used when connecting to all of the target nodes in a given playbook run
@@ -27,19 +27,18 @@ The following parameters can be used to control the `ansible-playbook` run itsel
 ## Parameters used during the deployment process
 These parameters are used to control the deployment process itself, defining things like which distribution to deploy, where to unpack the distribution into (if Apache Kafka is being deployed), and the list of topics that should be created at the conclusion of the playbook run.
 
-* **`kafka_package_list`**:
 * **`kafka_dir`**: the path to the directory that the (Apache) Kafka distribution should be unpacked into; defaults to `/opt/kafka` if unspecified
 * **`kafka_distro`**: the name of the distribution to install/configure. Only `apache` or `confluent` are supported; defaults to `confluent` if not specified
-* **`kafka_package_list`**: the list of packages that should be installed on the Kafka nodes; typically this parameter is left unchanged from it's default (which installs the OpenJDK packages needed to run Kafka), but if it is modified the default, OpenJDK packages must be included as part of this list or an error will result when attempting to start the `kafka` service
+* **`kafka_package_list`**: the list of packages that should be installed on the Kafka nodes; typically this parameter is left unchanged from the default (which installs the OpenJDK packages needed to run Kafka), but if it is modified the default, OpenJDK packages must be included as part of this list or an error will result when attempting to start the `kafka` service
 * **`kafka_topics`**: the list of topics to create at the end of the playbook run
 
 ## Parameters used to configure the Kafka nodes
-These parameters are used configure the Kafka nodes themselves during a playbook run, defining things like the interfaces that Kakfa should be listening on for requests and the directory where Kafka should store its data, and the list of seed nodes for the cluster.
+These parameters are used configure the Kafka nodes themselves during a playbook run, defining things like the interfaces that Kafka should be listening on for requests and the directory where Kafka should store its data.
 
 * **`data_iface`**: the name of the interface that the Kafka nodes in the cluster should use when talking with each other and when talking to the Zookeeper ensemble. This interface typically corresponds to a private or management network, with no customer access. An interface of this name must exist for the playbook to run successfully, and if unspecified a value of `eth0` is assumed
 * **`api_iface`**: the name of the interface that the Kafka nodes should listen on for user requests. This network corresponds to a public network since customers will use this interface to access the data in the Kafka cluster. An interface of this name must exist for the playbook to run successfully, and if unspecified a value of `eth0` is assumed
 * **`iface_description_array`**: this parameter can be used in place of the `data_iface` and `api_iface` parameters described above, and it provides users with the ability to specify a description of these two interfaces rather than identifying them by name (more on this, below)
-* **`kafka_data_dir`**: the name of the directory that Kafka should use to store it's data; defaults to `/var/lib` if unspecified. If necessary, this directory will be created as part of the playbook run
+* **`kafka_data_dir`**: the name of the directory that Kafka should use to store its data; defaults to `/var/lib` if unspecified. If necessary, this directory will be created as part of the playbook run
 
 ## Interface names vs. interface descriptions
 For some operating systems on some platforms, it can be difficult (if not impossible) to determine the names of the interfaces that should be passed into the playbook using the `data_iface` and `api_iface` parameters that we described, above. In those situations, the playbook in this repository provides an alternative; specifying those interfaces using the `iface_description_array` parameter instead.

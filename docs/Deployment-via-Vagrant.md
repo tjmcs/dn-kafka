@@ -11,11 +11,10 @@ When we are performing a multi-node deployment, then the nodes that make up the 
 
 ```bash
 $ vagrant -k="192.168.34.8,192.168.34.9,192.168.34.10" \
-    -z="192.168.34.18,192.168.34.19,192.168.34.20" \
     -i='./zookeeper_inventory' up
 ```
 
-This command will create a three-node Kafka cluster, configuring those nodes to work with the associated Zookeeper ensemble (which has been passed in using the `-z, --zookeeper-list` flag). Note that a third argument (the `-i, --zk-inventory-file` command-line argument) must also be included in this command. That argument is used to pass in a reference to the location of a static inventory file containing the information needed to connect to the nodes in the Zookeeper ensemble (so that the playbook can gather facts about those nodes to configure the Kafka nodes to talk to them correctly). If either of these two arguments are not provided when building a multi-node cluster, or if the values passed in by either of them are not valid values, then an error will be thrown by the `vagrant` command.
+This command will create a three-node Kafka cluster, configuring those nodes to work with the Zookeeper ensemble described in the static inventory that we are passing into the `vagrant ... up` command shown here using the `-i, --inventory-file` flag. The argument passed in using this flag **must** point to an Ansible (static) inventory file containing the information needed to connect to the nodes in that Zookeeper ensemble (so that the playbook can gather facts about those nodes to configure the Kafka nodes to talk to them correctly). If this second inventory file is not provided when building a multi-node cluster, or if the file passed in does not describe a valid Zookeeper ensemble (one with an odd number of nodes, where the number of nodes is between three and seven, and where none of the nodes in that cluster are also being used as part of the Kafka cluster we are deploying here), then an error will be thrown by the `vagrant` command.
 
 In terms of how it all works, the [Vagrantfile](../Vagrantfile) is written in such a way that the following sequence of events occurs when the `vagrant ... up` command shown above is run:
 
@@ -64,7 +63,6 @@ To provision the machines that were created above and configure those machines a
 
 ```bash
 $ vagrant -k="192.168.34.8,192.168.34.9,192.168.34.10" \
-    -z="192.168.34.18,192.168.34.19,192.168.34.20" \
     -i='./zookeeper_inventory' provision
 ```
 
@@ -74,8 +72,7 @@ That command will attach to the named instances and run the playbook in this rep
 While the commands shown above will install Kafka with a reasonable, default configuration from a standard location, there are additional command-line parameters that can be used to control the deployment process triggered by a `vagrant ... up` or `vagrant ... provision` command. Here is a complete list of the command-line flags that can be supported by the [Vagrantfile](../Vagrantfile) in this repository:
 
 * **`-k, --kafka-list`**: the Kafka address list; this is the list of nodes that will be created and provisioned, either by a single `vagrant ... up` command or by a `vagrant ... up --no-provision` command followed by a `vagrant ... provision` command; this command-line flag **must** be provided for almost every `vagrant` command supported by the [Vagrantfile](../Vagrantfile) in this repository
-* **`-z, --zookeeper-list`**: a comma-separated list of the nodes that make up the associated Zookeeper ensemble; this argument **must** be provided for any `vagrant` commands that involve provisioning of the instances that make up a Kafka cluster
-* **`-i, --zk-inventory-file`**: the path to a static inventory file containing the parameters needed to connect to the nodes that make up the associated Zookeeper ensemble; this argument **must** be provided for any `vagrant` commands that involve provisioning of the instances that make up a Kafka cluster
+* **`-i, --inventory-file`**: the path to a static inventory file containing the parameters needed to connect to the nodes that make up the associated Zookeeper ensemble; this argument **must** be provided for any `vagrant` commands that involve provisioning of the instances that make up a Kafka cluster
 * **`-n, --kafka-distro`**: the name of the distribution that should be deployed during the provisioning process; the playbook supports either `confluent` or `apache` as values for this parameter, and the default is to deploy the `confluent` distribution
 * **`-p, --path`**: the path that the distribution should be unpacked into; defaults to `/opt/kafka` and is only used for when installing the `apache` distribution (since the `confluent` distribution is installed using RPM packages, this parameter is unnecessary and is silently ignored)
 * **`-u, --url`**: the URL that the Apache Kafka distribution or Confluent RPM bundle should be downloaded from; this playbook supports downloading either a gzipped tarfile containing the Apache Kafka distribution or a gzipped tarfile containing a the RPM files that make up the Confluent distribution from a local web server
@@ -88,10 +85,9 @@ While the commands shown above will install Kafka with a reasonable, default con
 As an example of how these options might be used, the following command will download the gzipped tarfile containing the bundle of Confluent Kafka packages from a local web server, configure Kafka to store it's data in the `/data` directory, and install packages from the CentOS mirror on the eb server at `http://192.168.34.254/centos` when provisioning the machines created by the `vagrant ... up --no-provision` command shown above:
 
 ```bash
-$ vagrant -k="192.168.34.8,192.168.34.9,192.168.34.10" \
-    -z="192.168.34.18,192.168.34.19,192.168.34.20" \
-    -i='/Users/tjmcs/Vagrant/dn-zookeeper/.vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory' \
-    -d="/data" -u='http://192.168.34.254/confluent/confluent-3.2.0.tar.gz' \
+$ vagrant -k='192.168.34.8,192.168.34.9,192.168.34.10' \
+    -i='./zookeeper_inventory', -d='/data', \
+    -u='http://192.168.34.254/confluent/confluent-3.2.0.tar.gz' \
     -y='http://192.168.34.254/centos' provision
 ```
 

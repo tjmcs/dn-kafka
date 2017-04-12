@@ -52,14 +52,17 @@ $ cat test-cluster-inventory
 $
 ```
 
-To correctly configure our Kafka cluster to talk to the Zookeeper ensemble, the playbook will need to connect to the nodes that make up the associated Zookeeper ensemble and collect information from them, and to do so we'll have to pass in the information that Ansible will need to make those connections to the playbook. We do this by passing in a separate hash of hashes (the `zookeeper_inventory` for the deployment) that maps the same parameters shown above to each of the members of our Zookeeper ensemble. For the purposes of this example, let's assume that our `zookeeper_inventory` hash map looks something like this:
+To correctly configure our Kafka cluster to talk to the Zookeeper ensemble, the playbook will need to connect to the nodes that make up the associated Zookeeper ensemble and collect information from them, and to do so we'll have to pass in the information that Ansible will need to make those connections to the playbook. We do this by passing in a separate inventory file (the `zookeeper_inventory_file` for the deployment) that contains the inventory information for the members of the Zookeeper ensemble we will be associating with this Kafka cluster. For the purposes of this example, let's assume that our `zookeeper_inventory_file` looks something like this:
 
-```json
-    {
-      '192.168.34.18': { ansible_ssh_host: '192.168.34.18', ansible_ssh_port: 22, ansible_ssh_user: 'cloud-user', ansible_ssh_private_key_file: 'keys/zk_cluster_private_key'},
-      '192.168.34.19': { ansible_ssh_host: '192.168.34.19', ansible_ssh_port: 22, ansible_ssh_user: 'cloud-user', ansible_ssh_private_key_file: 'keys/zk_cluster_private_key'},
-      '192.168.34.20': { ansible_ssh_host: '192.168.34.20', ansible_ssh_port: 22, ansible_ssh_user: 'cloud-user', ansible_ssh_private_key_file: 'keys/zk_cluster_private_key'},
-    }
+```bash
+$ cat zookeeper-inventory
+# example inventory file for a clustered deployment
+
+192.168.34.18 ansible_ssh_host= 192.168.34.18 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
+192.168.34.19 ansible_ssh_host= 192.168.34.19 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
+192.168.34.20 ansible_ssh_host= 192.168.34.20 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
+
+$
 ```
 
 To deploy Kafka to the three nodes in our static inventory file, we'd run a command that looks something like this:
@@ -68,18 +71,7 @@ To deploy Kafka to the three nodes in our static inventory file, we'd run a comm
 $ ansible-playbook -i test-cluster-inventory -e "{ \
       host_inventory: ['192.168.34.8', '192.168.34.9', '192.168.34.10'], \
       cloud: vagrant, data_iface: eth0, api_iface: eth1, \
-      zookeeper_nodes: ['192.168.34.18', '192.168.34.19', '192.168.34.20'], \
-      zookeeper_inventory: {
-          '192.168.34.18': { ansible_ssh_host: '192.168.34.18', ansible_ssh_port: 22, \
-              ansible_ssh_user: 'cloud-user',  \
-              ansible_ssh_private_key_file: 'keys/zk_cluster_private_key' }, \
-          '192.168.34.19': { ansible_ssh_host: '192.168.34.19', ansible_ssh_port: 22,  \
-              ansible_ssh_user: 'cloud-user',  \
-              ansible_ssh_private_key_file: 'keys/zk_cluster_private_key' }, \
-          '192.168.34.20': { ansible_ssh_host: '192.168.34.20', ansible_ssh_port: 22,  \
-              ansible_ssh_user: 'cloud-user',  \
-              ansible_ssh_private_key_file: 'keys/zk_cluster_private_key' }, \
-      }, \
+      zookeeper_inventory_file: './zookeeper-inventory', \
       kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz', \
       yum_repo_url: 'http://192.168.34.254/centos', kafka_data_dir: '/data' \
     }" site.yml
@@ -91,26 +83,7 @@ Alternatively, rather than passing all of those arguments in on the command-line
 cloud: vagrant
 data_iface: eth0
 api_iface: eth1
-zookeeper_nodes:
-    - '192.168.34.18'
-    - '192.168.34.19'
-    - '192.168.34.20'
-zookeeper_inventory:
-    '192.168.34.18':
-        ansible_ssh_host: '192.168.34.18'
-        ansible_ssh_port: 22
-        ansible_ssh_user: 'cloud-user'
-        ansible_ssh_private_key_file: 'keys/zk_cluster_private_key'
-    '192.168.34.19':
-        ansible_ssh_host: '192.168.34.19'
-        ansible_ssh_port: 22
-        ansible_ssh_user: 'cloud-user'
-        ansible_ssh_private_key_file: 'keys/zk_cluster_private_key'
-    '192.168.34.20':
-        ansible_ssh_host: '192.168.34.20'
-        ansible_ssh_port: 22
-        ansible_ssh_user: 'cloud-user'
-        ansible_ssh_private_key_file: 'keys/zk_cluster_private_key'
+zookeeper_inventory_file: './zookeeper-inventory'
 kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz'
 kafka_data_dir: 'http://192.168.34.254/centos'
 solr_data_dir: '/data'

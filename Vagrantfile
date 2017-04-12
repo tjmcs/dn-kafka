@@ -376,8 +376,6 @@ if kafka_addr_array.size > 0
             if options[:local_vars_file]
               ansible.extra_vars[:local_vars_file] = options[:local_vars_file]
             end
-            if options[:inventory_file]
-            end
           end     # end `machine.vm.provision "ansible" do |ansible|`
         end     # end `if machine_addr == kafka_addr_array[-1]`
       end     # end `config.vm.define machine_addr do |machine|`

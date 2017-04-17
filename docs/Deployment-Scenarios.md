@@ -45,9 +45,9 @@ So, assuming that we've already deployed a three-node Zookeeper ensemble separat
 $ cat test-cluster-inventory
 # example inventory file for a clustered deployment
 
-192.168.34.8 ansible_ssh_host= 192.168.34.8 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
-192.168.34.9 ansible_ssh_host= 192.168.34.9 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
-192.168.34.10 ansible_ssh_host= 192.168.34.10 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
+192.168.34.8 ansible_ssh_host=192.168.34.8 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
+192.168.34.9 ansible_ssh_host=192.168.34.9 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
+192.168.34.10 ansible_ssh_host=192.168.34.10 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
 
 $
 ```
@@ -58,9 +58,9 @@ To correctly configure our Kafka cluster to talk to the Zookeeper ensemble, the 
 $ cat zookeeper-inventory
 # example inventory file for a clustered deployment
 
-192.168.34.18 ansible_ssh_host= 192.168.34.18 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
-192.168.34.19 ansible_ssh_host= 192.168.34.19 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
-192.168.34.20 ansible_ssh_host= 192.168.34.20 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
+192.168.34.18 ansible_ssh_host=192.168.34.18 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
+192.168.34.19 ansible_ssh_host=192.168.34.19 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
+192.168.34.20 ansible_ssh_host=192.168.34.20 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
 
 $
 ```
@@ -70,8 +70,45 @@ To deploy Kafka to the three nodes in our static inventory file, we'd run a comm
 ```bash
 $ ansible-playbook -i test-cluster-inventory -e "{ \
       host_inventory: ['192.168.34.8', '192.168.34.9', '192.168.34.10'], \
-      cloud: vagrant, data_iface: eth0, api_iface: eth1, \
+      inventory_type: static, data_iface: eth0, api_iface: eth1, \
       zookeeper_inventory_file: './zookeeper-inventory', \
+      kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz', \
+      yum_repo_url: 'http://192.168.34.254/centos', kafka_data_dir: '/data' \
+    }" site.yml
+```
+
+You could also combine the inventory files for the Kafka and Zookeeper nodes into one file. However, to do so you need to define which nodes belong in which host group (`kafka` vs. `zookeeper`) by adding those host groups to the end of the file
+
+```bash
+$ cat combined-inventory
+# example combined inventory file for clustered deployment
+
+192.168.34.8 ansible_ssh_host=192.168.34.8 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
+192.168.34.9 ansible_ssh_host=192.168.34.9 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
+192.168.34.10 ansible_ssh_host=192.168.34.10 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
+192.168.34.18 ansible_ssh_host=192.168.34.18 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
+192.168.34.19 ansible_ssh_host=192.168.34.19 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
+192.168.34.20 ansible_ssh_host=192.168.34.20 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
+
+[kafka]
+192.168.34.8
+192.168.34.9
+192.168.34.10
+
+[zookeeper]
+192.168.34.18
+192.168.34.19
+192.168.34.20
+
+```
+
+and that combined inventory file could then be passed into the `ansible-playbook` command:
+
+```bash
+$ ansible-playbook -i combined-inventory -e "{ \
+      host_inventory: ['192.168.34.8', '192.168.34.9', '192.168.34.10'], \
+      inventory_type: static, data_iface: eth0, api_iface: eth1, \
+      zookeeper_inventory_file: './combined-inventory', \
       kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz', \
       yum_repo_url: 'http://192.168.34.254/centos', kafka_data_dir: '/data' \
     }" site.yml
@@ -80,10 +117,10 @@ $ ansible-playbook -i test-cluster-inventory -e "{ \
 Alternatively, rather than passing all of those arguments in on the command-line as extra variables, we can make use of the *local variables file* support that is built into this playbook and construct a YAML file that looks something like this containing the configuration parameters that are being used for this deployment:
 
 ```yaml
-cloud: vagrant
+inventory_type: static
 data_iface: eth0
 api_iface: eth1
-zookeeper_inventory_file: './zookeeper-inventory'
+zookeeper_inventory_file: './combined-inventory'
 kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz'
 kafka_data_dir: 'http://192.168.34.254/centos'
 solr_data_dir: '/data'
@@ -92,7 +129,7 @@ solr_data_dir: '/data'
 and then we can pass in the *local variables file* as an argument to the `ansible-playbook` command; assuming the YAML file shown above was in the current working directory and was named `test-cluster-deployment-params.yml`, the resulting command would look somethin like this:
 
 ```bash
-$ ansible-playbook -i test-cluster-inventory -e "{ \
+$ ansible-playbook -i combined-inventory -e "{ \
       host_inventory: ['192.168.34.8', '192.168.34.9', '192.168.34.10'], \
       local_vars_file: 'test-cluster-deployment-params.yml' \
     }" site.yml
@@ -142,7 +179,7 @@ The `ansible-playbook` command used to deploy Kafka to our nodes and configure t
 ```bash
 $ ansible-playbook -i common-utils/inventory/osp/openstack -e "{ \
         host_inventory: 'meta-Application_kafka:&meta-Cloud_osp:&meta-Tenant_labs:&meta-Project_projectx:&meta-Domain_preprod', \
-        application: kafka, cloud: osp, tenant: labs, project: projectx, domain: preprod, \
+        application: kafka, cloud: osp, tenant: labs, project: projectx, domain: preprod, inventory_type: dynamic, \
         ansible_user: cloud-user, private_key_path: './keys', data_iface: eth0, api_iface: eth1, \
         kafka_data_dir: '/data' \
     }" site.yml
@@ -155,7 +192,7 @@ In an AWS environment, the command would look something like this:
 ```bash
 $ ansible-playbook -i common-utils/inventory/aws/ec2 -e "{ \
         host_inventory: 'tag_Application_kafka:&tag_Cloud_aws:&tag_Tenant_labs:&tag_Project_projectx:&tag_Domain_preprod', \
-        application: kafka, cloud: aws, tenant: labs, project: projectx, domain: preprod, \
+        application: kafka, cloud: aws, tenant: labs, project: projectx, domain: preprod, inventory_type: dynamic, \
         ansible_user: cloud-user, private_key_path: './keys', data_iface: eth0, api_iface: eth1, \
         kafka_data_dir: '/data' \
     }" site.yml

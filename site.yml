@@ -18,14 +18,14 @@
         host_group_list:
           - name: kafka
           - name: zookeeper
-      when: cloud == 'aws' or cloud == 'osp'
+      when: inventory_type == 'dynamic'
     - include_role:
         name: build-app-host-groups
       vars:
         host_group_list:
           - { name: kafka, node_list: "{{host_inventory}}" }
           - { name: zookeeper, inventory_file: "{{zookeeper_inventory_file}}" }
-      when: cloud == "vagrant"
+      when: inventory_type == 'static'
 
 # Collect some Zookeeper related facts and determine the "private" IP addresses of
 # the nodes in the Zookeeper ensemble (from their "public" IP addresses and the `data_iface`
@@ -38,7 +38,7 @@
 # Then, deploy Kafka to the nodes in the `host_inventory` that was passed in (if there
 # is more than one node passed in, those nodes will be configured as a single Kafka cluster)
 - name: Install/configure Kafka server(s)
-  hosts: kafka
+  hosts: kafka:&kafka_nodes
   gather_facts: no
   vars_files:
     - vars/kafka.yml

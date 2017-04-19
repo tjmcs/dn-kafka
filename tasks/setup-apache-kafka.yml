@@ -4,6 +4,9 @@
 # Fusion from a local directory on the Ansible node (or not)
 - set_fact:
     install_from_dir: "{{not(local_kafka_file is undefined or local_kafka_file is none or local_kafka_file | trim == '')}}"
+- set_fact:
+    install_from_url: "{{not(kafka_url is undefined or kafka_url is none or kafka_url | trim == '')}}"
+  when: not(install_from_dir)
 # if we're not installing Kafka from a local directory then we're installing
 # from a repository (either a local repository or the standard Apache Kafka
 # repository)

@@ -47,18 +47,7 @@
       validate_certs: no
     environment: "{{environment_vars}}"
   - set_fact:
-      archive_filename: "{{kafka_url | basename}}"
-  - set_fact:
-      local_filename: "{{archive_filename.split('.').0}}"
-  - name: Unpack kafka distribution into "{{kafka_dir}}"
-    unarchive:
-      copy: no
-      src: "/tmp/{{archive_filename}}"
-      dest: "/tmp"
-      list_files: yes
-    register: unarchive_out
-  - set_fact:
-      local_filename: "{{unarchive_out.files[0]}}"
+      local_filename: "{{kafka_url | basename}}"
   become: true
   when: install_from_url is defined and install_from_url
 - block:
@@ -72,9 +61,18 @@
   become: true
   when: install_from_dir
 - block:
+  - name: Unpack kafka distribution into directory in /tmp
+    unarchive:
+      copy: no
+      src: "/tmp/{{local_filename}}"
+      dest: "/tmp"
+      list_files: yes
+    register: unarchive_out
+  - set_fact:
+      archive_dirname: "{{unarchive_out.files[0]}}"
   - name: Get a list of the packages copied over
     find:
-      paths: "/tmp/{{local_filename}}"
+      paths: "/tmp/{{archive_dirname}}"
       patterns: "*.rpm"
     register: rpm_list
   - name: Install all of the packages copied over
@@ -113,7 +111,7 @@
 # cleanup the temporary files created
 - name: Remove downloaded RPM bundle
   file:
-    path: "/tmp/{{archive_filename}}"
+    path: "/tmp/{{archive_dirname}}"
     state: absent
   become: true
   when: install_from_url is defined and install_from_url

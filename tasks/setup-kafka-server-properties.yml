@@ -11,7 +11,7 @@
   - name: Configure kafka server instance listener address
     replace:
       dest: "{{kafka_config_dir}}/server.properties"
-      regexp: '^\#(([a-zA-Z]*.?)listeners=PLAINTEXT://).*(:9092)$'
+      regexp: '^\#?(([a-zA-Z]*.?)listeners=PLAINTEXT://).*(:9092)$'
       replace: '\g<1>{{api_addr}}\g<3>'
   - name: Configure server to use the defined data directory
     lineinfile:

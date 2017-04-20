@@ -20,7 +20,8 @@ Note that in this inventory file the `ansible_ssh_host` and `ansible_ssh_port` p
 Once we've built our static inventory file, we need to decide which Kafka distribution we want to deploy to our node. For purposes of this example, let's assume that we want to deploy the Confluent distribution (the default). To deploy the Confluent Kafka distribution to our single node, we would simply run an `ansible-playbook` command that looks something like this:
 
 ```bash
-$ ansible-playbook -i single-node-inventory -e "{ host_inventory: ['192.168.34.2'] }" site.yml
+$ ansible-playbook -i single-node-inventory -e "{ host_inventory: ['192.168.34.2'], \
+    provisioning: true }" site.yml
 ```
 
 This will install the Confluent Kafka distribution as a set of packages, using the default package repository that is defined in the [templates/confluent-repo.j2](../templates/confluent-repo.j2) template, and configure the node as a single-node Kafka instance (using the default configuration parameters that are defined in the [vars/kafka.yml](../vars/kafka.yml) file). It should be noted here that When deploying a single-node Kafka instance, regardless of the distribution, an instance of Zookeeper will also be deployed locally on the same node. The Kafka instance will then be configured to work with that bundled Zookeeper instance.
@@ -29,7 +30,7 @@ If we wanted to deploy the Apache Kafka distribution to our node instead of the 
 
 ```bash
 $ ansible-playbook -i single-node-inventory -e "{ host_inventory: ['192.168.34.2'], \
-    kafka_distro: 'apache' }" site.yml
+    provisioning: true, kafka_distro: 'apache' }" site.yml
 ```
 
 This command will download the Apache Kafka distribution from the default URL defined in the [vars/kafka.yml](../vars/kafka.yml) file (the main Apache download site), unpack that distribution file into the `/opt/kafka` directory on that host (the default value for the location to unpack the distribution into), and configure both the bundled `zookeeper` instance and the `kafka` instance on that host, enable those services to start on boot, and (re)start them in that order (first `zookeeper`, then `kafka`).
@@ -70,8 +71,8 @@ To deploy Kafka to the three nodes in our static inventory file, we'd run a comm
 ```bash
 $ ansible-playbook -i test-cluster-inventory -e "{ \
       host_inventory: ['192.168.34.8', '192.168.34.9', '192.168.34.10'], \
-      inventory_type: static, data_iface: eth0, api_iface: eth1, \
-      zookeeper_inventory_file: './zookeeper-inventory', \
+      provisioning: true, inventory_type: static, data_iface: eth0, \
+      api_iface: eth1, zookeeper_inventory_file: './zookeeper-inventory', \
       kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz', \
       yum_repo_url: 'http://192.168.34.254/centos', kafka_data_dir: '/data' \
     }" site.yml
@@ -107,8 +108,8 @@ and that combined inventory file could then be passed into the `ansible-playbook
 ```bash
 $ ansible-playbook -i combined-inventory -e "{ \
       host_inventory: ['192.168.34.8', '192.168.34.9', '192.168.34.10'], \
-      inventory_type: static, data_iface: eth0, api_iface: eth1, \
-      zookeeper_inventory_file: './combined-inventory', \
+      provisioning: true, inventory_type: static, data_iface: eth0, \
+      api_iface: eth1, zookeeper_inventory_file: './combined-inventory', \
       kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz', \
       yum_repo_url: 'http://192.168.34.254/centos', kafka_data_dir: '/data' \
     }" site.yml
@@ -118,6 +119,7 @@ Alternatively, rather than passing all of those arguments in on the command-line
 
 ```yaml
 inventory_type: static
+provisioning: true
 data_iface: eth0
 api_iface: eth1
 zookeeper_inventory_file: './combined-inventory'
@@ -179,7 +181,7 @@ The `ansible-playbook` command used to deploy Kafka to our nodes and configure t
 ```bash
 $ ansible-playbook -i common-utils/inventory/osp/openstack -e "{ \
         host_inventory: 'meta-Application_kafka:&meta-Cloud_osp:&meta-Tenant_labs:&meta-Project_projectx:&meta-Domain_preprod', \
-        application: kafka, cloud: osp, tenant: labs, project: projectx, domain: preprod, inventory_type: dynamic, \
+        provisioning: true, application: kafka, cloud: osp, tenant: labs, project: projectx, domain: preprod, inventory_type: dynamic, \
         ansible_user: cloud-user, private_key_path: './keys', data_iface: eth0, api_iface: eth1, \
         kafka_data_dir: '/data' \
     }" site.yml
@@ -192,7 +194,7 @@ In an AWS environment, the command would look something like this:
 ```bash
 $ ansible-playbook -i common-utils/inventory/aws/ec2 -e "{ \
         host_inventory: 'tag_Application_kafka:&tag_Cloud_aws:&tag_Tenant_labs:&tag_Project_projectx:&tag_Domain_preprod', \
-        application: kafka, cloud: aws, tenant: labs, project: projectx, domain: preprod, inventory_type: dynamic, \
+        provisioning: true, application: kafka, cloud: aws, tenant: labs, project: projectx, domain: preprod, inventory_type: dynamic, \
         ansible_user: cloud-user, private_key_path: './keys', data_iface: eth0, api_iface: eth1, \
         kafka_data_dir: '/data' \
     }" site.yml

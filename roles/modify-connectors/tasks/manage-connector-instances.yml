@@ -1,0 +1,85 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+---
+# Based on the action passed in, take the appropriate action on the named
+# connnector (using the connector name, RESTful URL and, potentially,
+# configuration information that was passed in to setup the appropriate
+# RESTful request for the requested action)
+- set_fact:
+    request_body_hash:
+      name: "{{connector_name}}"
+      config: "{{connector_config}}"
+  when: action == 'start'
+- set_fact:
+    request_body_hash: "{{connector_config}}"
+  when: action == 'update'
+# if we're starting a new instance, then put together a POST command to do so
+- name: Start new {{connector_name}} connector instance
+  uri:
+    headers:
+      Content-Type: "application/json"
+    body: "{{request_body_hash | to_json}}"
+    method: POST
+    url: "{{connector_worker_url}}"
+    status_code: "200,201,202,204"
+    return_content: yes
+  register: returned_content
+  run_once: true
+  when: action == 'start'
+# if we're restarting an existing instance, then put together a POST command
+# to do so
+- name: Restart (running) {{connector_name}} connector instance
+  uri:
+    method: POST
+    url: "{{connector_worker_url}}/{{connector_name}}/restart"
+    status_code: "200,202,204"
+    return_content: yes
+  register: returned_content
+  run_once: true
+  when: action == 'restart'
+# if we're updating the configuration of an existing connector instance, then
+# put together a PUT command to do so
+- name: Update (running) {{connector_name}} connector configuration
+  uri:
+    headers:
+      Content-Type: "application/json"
+    body: "{{request_body_hash | to_json}}"
+    method: PUT
+    url: "{{connector_worker_url}}/{{connector_name}}/config"
+    status_code: "200,202,204"
+    return_content: yes
+  register: returned_content
+  run_once: true
+  when: action == 'update'
+# if we're pausing an existing connector instance, then put together a PUT
+# command to do so
+- name: Pause (running) {{connector_name}} connector instance
+  uri:
+    method: PUT
+    url: "{{connector_worker_url}}/{{connector_name}}/pause"
+    status_code: "200,202,204"
+    return_content: yes
+  register: returned_content
+  run_once: true
+  when: action == 'pause'
+# if we're resuming an existing connector instance, then put together a PUT
+# command to do so
+- name: Resume (paused) {{connector_name}} connector instance
+  uri:
+    method: PUT
+    url: "{{connector_worker_url}}/{{connector_name}}/resume"
+    status_code: "200,202,204"
+    return_content: yes
+  register: returned_content
+  run_once: true
+  when: action == 'resume'
+# if we're resuming an existing connector instance, then put together a PUT
+# command to do so
+- name: Remove (existing) {{connector_name}} connector instance from worker
+  uri:
+    method: DELETE
+    url: "{{connector_worker_url}}/{{connector_name}}"
+    status_code: "200,202,204"
+    return_content: yes
+  register: returned_content
+  run_once: true
+  when: action == 'remove'

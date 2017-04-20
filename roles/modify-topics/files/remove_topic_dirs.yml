@@ -1,0 +1,33 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+---
+# Contains tasks to delete the directories associated with a given
+# topic (included as part of the process of removing topics); first
+# retrieve a list of the topics that we are removing
+- name: Get a list of the matching topic directories
+  find:
+    paths: "{{kafka_data_dir}}/kafka"
+    patterns: "{{topic}}-*"
+    file_type: directory
+  register: dir_list
+- set_fact:
+    topic_dirs: "{{dir_list.files | map(attribute='path') | map('basename') | list}}"
+    filename_timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+    construct_archive: "{{backup_topics}}"
+# if the user requested a backup, use the `tar` command to construct an
+# archive containing the files from the matching `topic_dirs`, then remove
+# those directories (while recent, v2.3 and later, versions of Ansible include
+# an `archive` module, this method works, regardless of the version of Ansible
+# that is being used)
+- block:
+  - name: Construct a tarfile containing the matching topic directories (if requested)
+    shell: "tar -C {{kafka_data_dir}}/kafka -jcf {{kafka_data_dir}}/kafka/{{topic}}-archive-{{filename_timestamp}}.tar.bz2 {{topic_dirs | join(' ')}}"
+    args:
+      warn: no
+    when: construct_archive
+  - name: Remove matching topic directories from Kafka nodes
+    file:
+      path: "{{kafka_data_dir}}/kafka/{{item}}"
+      state: absent
+    with_items: "{{topic_dirs}}"
+  become_user: kafka
+  become: true

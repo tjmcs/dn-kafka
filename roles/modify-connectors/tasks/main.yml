@@ -1,0 +1,60 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+---
+# Contains tasks to modify connectors in the cluster (currently only
+# adding connectors to the cluster is supported, but this is extensible)
+- block:
+  # set a few facts containing the various supported MIME types
+  - set_fact:
+      package_mime_types:
+        - 'application/x-rpm'
+      archive_mime_types:
+        - 'application/x-tar'
+        - 'application/x-gzip'
+        - 'application/zip'
+        - 'application/x-zip'
+        - 'application/x-bzip'
+        - 'application/x-bz2'
+        - 'application/x-bzip2'
+        - 'application/x-xz'
+      jar_mime_types:
+        - 'application/zip'
+        - 'application/x-zip'
+  # if the action is 'start-worker', then start the a worker in the connector
+  # framework in distributed mode
+  - include: manage-connector-workers.yml static=no
+    vars:
+      connector_worker_url: "http://{{data_addr}}:{{action_hash.worker_port | default(8083)}}/connectors"
+      key_converter: "{{action_hash.key_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
+      value_converter: "{{action_hash.value_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
+      internal_key_converter: "{{action_hash.internal_key_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
+      internal_value_converter: "{{action_hash.internal_value_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
+      offset_topic: "{{action_hash.offset_topic | default('connect-offsets')}}"
+      config_topic: "{{action_hash.config_topic | default('connect-configs')}}"
+      status_topic: "{{action_hash.status_topic | default('connect-status')}}"
+      rest_port: "{{action_hash.worker_port | default(8083)}}"
+      group_id: "{{action_hash.group_id | default('default_group')}}"
+      action: "{{action_hash.action}}"
+    when: ([(action_hash.action | default (''))] | intersect(['start-worker', 'stop-worker', 'restart-worker'])) != []
+  # if the action is 'add', then loop through the connectors that are being
+  # added and add each of them, in turn, to the target nodes based on the
+  # information in the corresponding 'action_hash' entry
+  - include: add-connector.yml static=no
+    vars:
+      connector_name: "{{item.name}}"
+      local_connector_file: "{{item.local_file | default('')}}"
+      connector_url: "{{item.connector_url | default('')}}"
+    with_items: "{{action_hash.connectors | default([])}}"
+    when: (action_hash.action | default ('')) == 'add'
+  # if the action is 'start', 'update', 'pause', 'resume', or 'remove' then
+  # loop through the connectors in the 'action_hash' and perform the
+  # corresponding action on each of them, in turn, using the information in
+  # the corresponding 'action_hash' entry
+  - include: manage-connector-instances.yml static=no
+    vars:
+      connector_name: "{{item.name}}"
+      connector_config: "{{item.config | default({})}}"
+      connector_worker_url: "http://{{data_addr}}:{{action_hash.worker_port | default(8083)}}/connectors"
+      action: "{{action_hash.action}}"
+    with_items: "{{action_hash.connectors | default([])}}"
+    when: ([(action_hash.action | default (''))] | intersect(['start', 'restart', 'update', 'pause', 'resume', 'remove'])) != []
+  when: (action_hash | default({})) != {}

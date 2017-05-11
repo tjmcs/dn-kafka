@@ -1,0 +1,114 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+---
+# Contains tasks to create new topics or delete existing ones
+- block:
+  # First, sort out the appropriate command that should be used to modify
+  # topics on this cluster
+  - name: Find kafka-topics command (if exists)
+    shell: 'which kafka-topics'
+    register: command_result
+    failed_when:
+      - "'no kafka-topics in' not in command_result.stderr"
+      - "command_result.rc != 0"
+    run_once: true
+  - name: Set kafka_topics_cmd from output
+    set_fact:
+      kafka_topics_cmd: "{{command_result.stdout}}"
+      lcl_zk_shell_cmd: "{{(command_result.stdout | dirname)}}/zookeeper-shell"
+    when: command_result.rc == 0
+    run_once: true
+  - name: Setup default kafka_topics_cmd ({{kafka_dir}}/bin/kafka-topics.sh) if not found
+    set_fact:
+      kafka_topics_cmd: "{{kafka_dir}}/bin/kafka-topics.sh"
+      lcl_zk_shell_cmd: "{{kafka_dir}}/bin/zookeeper-shell.sh"
+    run_once: true
+    when: kafka_topics_cmd is undefined
+  - name: Set path to binaries for distribution
+    set_fact:
+      kafka_bin_dir: "{{kafka_topics_cmd | dirname}}"
+    run_once: true
+  # Next, pick one of our Zookeeper nodes to use for the commands we'll be running
+  - set_fact:
+      rand_zk_node: "{{zk_nodes | random}}"
+    when: zk_nodes is defined and zk_nodes != []
+  - set_fact:
+      zk_node: "{{rand_zk_node | default('localhost')}}"
+  # If we're creating a new set of topics, then just run the appropriate command on one of
+  # the nodes in our Kafka cluster
+  - name: Adding topics to the cluster
+    shell: "{{kafka_topics_cmd}} --create --zookeeper={{zk_node}}:2181 --replication-factor={{action_hash.repl_factor | default(1)}} --partitions={{action_hash.partitions | default(1)}} --topic={{item}}"
+    with_items: "{{action_hash.topic_list | default([])}}"
+    when: action_hash.action == 'create'
+    run_once: true
+  # Otherwise, if we're removing a topic there's a bit of work to do
+  - block:
+    # First, mark the topic for deletion by running the appropriate command on one of
+    # the nodes in our Kafka cluster
+    - name: Removing topics from the Kafka cluster
+      shell: "{{kafka_topics_cmd}} --delete --zookeeper={{zk_node}}:2181 --topic={{item}}"
+      register: command_result
+      failed_when:
+        - ('Topic ' + item + ' does not exist') not in command_result.stderr
+        - ('Topic ' + item + ' is marked for deletion') not in command_result.stderr
+        - ('Topic ' + item + ' is already marked for deletion') not in command_result.stderr
+        - "command_result.rc != 0"
+      with_items: "{{action_hash.topic_list | default([])}}"
+      run_once: true
+    # Then shut down the Kafka service on all of the nodes in our cluster
+    - name: Stop kafka service
+      service:
+        name: kafka
+        state: stopped
+      become_user: root
+    # Find and remove any directories associated with that topic from the nodes
+    # in our cluster
+    - include: ../files/remove_topic_dirs.yml static=no
+      vars:
+        backup_topics: "{{action_hash.backup_topics | default(false)}}"
+      with_items: "{{action_hash.topic_list | default([])}}"
+      loop_control:
+        loop_var: topic
+    # Remove the associated Zookeeper node from the Zookeeper ensemble by connecting
+    # to one of the instances via SSH from the Ansible host and runnign the appropriate
+    # `zkCli.sh rmr ...` command
+    - name: Remove corresponding nodes from remote Zookeeper ensemble
+      local_action: shell ssh -i '{{hostvars[zk_node].ansible_ssh_private_key_file}}' -p '{{hostvars[zk_node].ansible_ssh_port}}' {{hostvars[zk_node].ansible_ssh_user}}@{{hostvars[zk_node].ansible_ssh_host}} 'for topic in {{action_hash.topic_list | join(' ')}}; do sudo -u zookeeper {{remote_zookeeper_dir}}/bin/zkCli.sh rmr /brokers/topics/$topic; done'
+      register: test_output
+      become: false
+      failed_when: false
+      run_once: true
+      when: zk_node != 'localhost' and (action_hash.topic_list | default([])) != []
+    # Remove the associated Zookeeper node from the local Zookeeper instance by running
+    # the appropriate `zkCli.sh rmr ...` command (locally)
+    - name: Remove corresponding nodes from bundled Zookeeper instance
+      shell: "{{lcl_zk_shell_cmd}} localhost:2181 rmr /brokers/topics/{{item}}"
+      register: test_output
+      failed_when: false
+      with_items: "{{action_hash.topic_list | default([])}}"
+      run_once: true
+      when: zk_node == 'localhost'
+    # now that the topic has been removed from both Zookeeper and the nodes in our
+    # cluster it's safe to restart the Kafka service; when complete the topic will
+    # no longer show up on the cluster's list of topics
+    - name: Start kafka service
+      service:
+        name: kafka
+        state: started
+      become_user: root
+    # Finally, if this is an Apache Kafka distribution, delete the topic one more time
+    # (this should ensure it disappears from such instances; without this step it seems
+    # to come back in a "marked for deletion" state if the topic is created again later)
+    - name: For Apache Kafka instances/clusters, remove topics again
+      shell: "{{kafka_topics_cmd}} --delete --zookeeper={{zk_node}}:2181 --topic={{item}}"
+      register: command_result
+      failed_when:
+        - ('Topic ' + item + ' does not exist') not in command_result.stderr
+        - ('Topic ' + item + ' is marked for deletion') not in command_result.stderr
+        - ('Topic ' + item + ' is already marked for deletion') not in command_result.stderr
+        - "command_result.rc != 0"
+      with_items: "{{action_hash.topic_list | default([])}}"
+      run_once: true
+      when: kafka_distro == 'apache'
+    when: action_hash.action == 'delete'
+  become: true
+  become_user: kafka

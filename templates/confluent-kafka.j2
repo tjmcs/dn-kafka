@@ -2,7 +2,7 @@
 Description=Confluent Kafka server (broker)
 Documentation=http://docs.confluent.io
 Requires=network.target remote-fs.target 
-After=network.target remote-fs.target kafka-zookeeper.service
+After=network.target remote-fs.target syslog.target
 
 [Service]
 Type=simple

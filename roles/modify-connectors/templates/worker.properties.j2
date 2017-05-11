@@ -1,0 +1,31 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+
+# The list of host/port pairs used to establish the initial connection to the
+# Kafka cluster; this list is used to discover the full set of nodes in the
+# cluster
+bootstrap.servers={{(kfka_nodes | join(':9092,')) + ':9092'}}
+
+# The connect cluster group this worker belongs to
+group.id={{group_id}}
+
+# the host and port that the RESTful API should listen on
+rest.host.name={{data_addr}}
+rest.port={{rest_port}}
+
+# The converters specify the format of data in Kafka and how to translate it
+# into Connect data. Every Connect user will need to configure these based on
+# the format they want their data in when loaded from or stored into Kafka
+key.converter={{key_converter}}
+value.converter={{value_converter}}
+
+# The internal converter used for offsets and config data is configurable and
+# must be specified, but most users will always want to use the built-in
+# default.  Offset and config data is never visible outside of Copycat in
+# this format.
+internal.key.converter={{internal_key_converter}}
+internal.value.converter={{internal_value_converter}}
+
+# topics to use to manage offsets, configurations, and status information
+offset.storage.topic={{offset_topic}}
+config.storage.topic={{config_topic}}
+status.storage.topic={{status_topic}}

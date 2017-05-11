@@ -336,6 +336,7 @@ if kafka_addr_array.size > 0
                 proxy_username: proxy_username,
                 proxy_password: proxy_password
               },
+              provisioning: true,
               data_iface: "eth1",
               api_iface: "eth1",
               kafka_distro: options[:kafka_distro],

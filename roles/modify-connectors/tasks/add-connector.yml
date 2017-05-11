@@ -1,0 +1,156 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+---
+# Contains tasks to add connectors to the cluster; first set a few
+# facts that we'll be using later in this role
+- set_fact:
+    kfka_nodes: "{{kafka_nodes | map('extract', hostvars, [('ansible_' + data_iface), 'ipv4', 'address']) | list}}"
+    install_from_dir: "{{not(local_connector_file is undefined or local_connector_file is none or local_connector_file | trim == '')}}"
+- set_fact:
+    install_from_url: "{{not(connector_url is undefined or connector_url is none or connector_url | trim == '')}}"
+  when: not(install_from_dir)
+- set_fact:
+    connector_dir: '{{kafka_dir}}/libs/{{connector_name}}'
+  when: kafka_distro == 'apache'
+# if we're not installing the connector from a local directory then we're installing
+# from a repository (either a local repository or the standard Apache Kafka
+# repository)
+- block:
+  - name: Download connector distribution file to /tmp
+    become: true
+    get_url:
+      url: "{{connector_url}}"
+      dest: /tmp
+      mode: 0644
+      validate_certs: no
+    environment: "{{environment_vars}}"
+  - set_fact:
+      local_filename: "{{connector_url | basename}}"
+  become: true
+  become_user: kafka
+  when: not(install_from_dir)
+# otherwise, if we're installing from a local directory on the Ansible node
+# that we're running this playbook from, copy over the files from that directory
+# to a temporary directory and and install the Confluent packages from those files
+- block:
+  - name: Copy connector distribution file from a local directory to /tmp
+    copy:
+      src: "{{local_connector_file}}"
+      dest: "/tmp"
+      mode: 0644
+  - set_fact:
+      local_filename: "{{local_connector_file | basename}}"
+  become: true
+  become_user: kafka
+  when: install_from_dir
+# determine MIME-type information for file copied over or downloaded
+- name: Get MIME-type information for file
+  stat:
+    path: "/tmp/{{local_filename}}"
+    mime: yes
+  register: stat_out
+- set_fact:
+    file_type: "{{stat_out.stat.mime_type}}"
+# set a fact containing the connector directory and a set of facts based on the mime-type
+# of the file and the file's extension (determined above); these latter facts are used to
+# determine how the file should be handled (we can't just rely on the MIME type since some
+# of the supported MIME types map to more than one type of file, for example a JAR
+# file has an 'application/zip' MIME type which could also be considered to be an archive
+# format but we want to handle JAR files that are passed in differently from the other
+# archive formats)
+- name: Set connector directory and file type related facts
+  set_fact:
+    connector_dirname: "{{connector_dir | default('/usr/share/java/' + connector_name)}}"
+    is_package_mime_type: "{{([file_type] | intersect(package_mime_types)) != []}}"
+    file_has_rpm_ext: "{{local_filename | lower | match('.*\\.rpm')}}"
+    is_archive_mime_type: "{{([file_type] | intersect(archive_mime_types)) != []}}"
+    file_has_archive_ext: "{{local_filename | lower | match('.*\\.tar|.*\\.tar.[bg]z|.*\\.tar.bz2|.*\\.tar.b2|.*\\.t[bg]z|.*\\.tbz2|.*\\.tb2|.*\\.zip')}}"
+    is_jar_mime_type: "{{([file_type] | intersect(jar_mime_types)) != []}}"
+    file_has_jar_ext: "{{local_filename | lower | match('.*\\.jar')}}"
+# if the file passed in is a package, install that package from the file and clean
+# up the temporary file we created
+- block:
+  - name: "Installing {{ local_filename }}"
+    package:
+      name: "/tmp/{{local_filename}}"
+      state: present
+  - name: "Remove /tmp/{{ local_filename }}"
+    file:
+      path: "/tmp/{{local_filename}}"
+      state: absent
+  become: true
+  when: file_has_rpm_ext and is_package_mime_type
+# if the file passed in is an archive or JAR file, then create a directory to contain
+# the file (or files in the case of an archive) copied over
+- block:
+  - name: Ensure connector directory is empty
+    file:
+      path: "{{connector_dirname}}"
+      state: absent
+      owner: kafka
+      group: kafka
+  - name: Create connector directory
+    file:
+      path: "{{connector_dirname}}"
+      state: directory
+      owner: kafka
+      group: kafka
+  become: true
+  when: (file_has_archive_ext and is_archive_mime_type) or (file_has_jar_ext and is_jar_mime_type)
+# if the file is an archive, then unpack the distribution file into the '/tmp'
+# directory, copy the files unpacked into the connector directory, and clean up
+# the temporary files we created
+- block:
+  - name: Unpack kafka distribution into /tmp directory
+    unarchive:
+      copy: no
+      src: "/tmp/{{local_filename}}"
+      dest: "/tmp"
+      owner: kafka
+      group: kafka
+      list_files: yes
+    register: unarchive_out
+  - set_fact:
+      archive_dirname: "{{unarchive_out.files[0]}}"
+  - name: Get a list of the files from archive
+    find:
+      paths: "/tmp/{{archive_dirname}}"
+      file_type: file
+    register: file_list
+  - name: Copy files from archive over to the connector directory
+    copy:
+      src: "{{file_path}}"
+      dest: "{{connector_dirname}}/{{file_path | basename}}"
+      remote_src: yes
+      owner: kafka
+      group: kafka
+      mode: 0644
+    with_items: "{{file_list.files | map(attribute='path') | list}}"
+    loop_control:
+      loop_var: file_path
+  - name: "Remove /tmp/{{ local_filename }}"
+    file:
+      path: "/tmp/{{local_filename}}"
+      state: absent
+  - name: "Remove /tmp/{{ archive_dirname }}"
+    file:
+      path: "/tmp/{{archive_dirname}}"
+      state: absent
+  become: true
+  when: file_has_archive_ext and is_archive_mime_type
+# if the file is a JAR file, then just copy that JAR file over to the
+# connector directory and clean up the temporary file we created
+- block:
+  - name: Copy file over to the connector directory
+    copy:
+      src: "/tmp/{{local_filename}}"
+      dest: "{{connector_dirname}}/{{local_filename}}"
+      remote_src: yes
+      owner: kafka
+      group: kafka
+      mode: 0644
+  - name: "Remove /tmp/{{ local_filename }}"
+    file:
+      path: "/tmp/{{local_filename}}"
+      state: absent
+  become: true
+  when: file_has_jar_ext and is_jar_mime_type

@@ -30,7 +30,7 @@
       regexp: "^broker.id="
       line: "broker.id={{item.0}}"
     with_indexed_items: "{{kfka_nodes}}"
-    when: "(num_hosts | int > 1) and ('{{data_addr}}' == '{{item.1}}')"
+    when: (num_hosts | int > 1) and (data_addr == item.1)
   - name: setup confluent-schema-registry listener if deploying a Confluent cluster
     replace:
       dest: "{{schema_registry_config_dir}}/schema-registry.properties"

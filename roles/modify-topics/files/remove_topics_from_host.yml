@@ -1,0 +1,53 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+---
+# Then shut down the Kafka service on a node in our cluster
+- name: Stop kafka service on {{current_host}}
+  service:
+    name: kafka
+    state: stopped
+  become_user: root
+# Find and remove any directories associated with that topic from the nodes
+# in our cluster
+- include: ../files/remove_topic_dirs.yml static=no
+  vars:
+    backup_topics: "{{action_hash.backup_topics | default(false)}}"
+  with_items: "{{action_hash.topic_list | default([])}}"
+  loop_control:
+    loop_var: topic
+# If this is the first node in the cluster, then remove the associated metadata
+# from the Zookeeper instance/ensemble by connecting to one of the instances
+# (via SSH if it's a remote instance/ensemble) from the Ansible host and running
+# the appropriate `zkCli.sh rmr ...` command
+- block:
+  - name: If first node and remote Zookeeper ensemble, remove metadata from Zookeeper ensemble
+    local_action: shell ssh -i '{{hostvars[zk_node].ansible_ssh_private_key_file}}' -p '{{hostvars[zk_node].ansible_ssh_port}}' {{hostvars[zk_node].ansible_ssh_user}}@{{hostvars[zk_node].ansible_ssh_host}} 'for topic in {{action_hash.topic_list | join(' ')}}; do sudo -u zookeeper {{remote_zookeeper_dir}}/bin/zkCli.sh rmr /brokers/topics/$topic; done'
+    register: test_output
+    become: false
+    failed_when: false
+    run_once: true
+    when: zk_node != 'localhost' and (action_hash.topic_list | default([])) != []
+  # Remove the associated Zookeeper node from the local Zookeeper instance by running
+  # the appropriate `zkCli.sh rmr ...` command (locally)
+  - name: If first node and bundled Zookeeper instance, remove metadata from Zookeeper instance
+    shell: "{{lcl_zk_shell_cmd}} localhost:2181 rmr /brokers/topics/{{item}}"
+    register: test_output
+    failed_when: false
+    with_items: "{{action_hash.topic_list | default([])}}"
+    run_once: true
+    when: zk_node == 'localhost'
+  when: current_host == play_hosts[0]
+# now that the topic has been removed from both Zookeeper and the nodes in our
+# cluster it's safe to restart the Kafka service; when complete the topic will
+# no longer show up on the cluster's list of topics
+- name: Start kafka service on {{current_host}}
+  service:
+    name: kafka
+    state: started
+  become_user: root
+# and pause for a configurable number of seconds (by default, will pause for
+# 5 seconds) to make sure that this host is running before we continue with
+# the next host in teh cluster
+- name: Pause for {{action_hash.seconds_between_hosts | default(5)}} seconds between hosts
+  pause:
+    seconds: "{{action_hash.seconds_between_hosts | default(5)}}"
+  when: not (current_host == last_host)

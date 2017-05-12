@@ -44,7 +44,7 @@
   - block:
     # First, mark the topic for deletion by running the appropriate command on one of
     # the nodes in our Kafka cluster
-    - name: Removing topics from the Kafka cluster
+    - name: Remove topics from the Kafka cluster
       shell: "{{kafka_topics_cmd}} --delete --zookeeper={{zk_node}}:2181 --topic={{item}}"
       register: command_result
       failed_when:
@@ -54,47 +54,20 @@
         - "command_result.rc != 0"
       with_items: "{{action_hash.topic_list | default([])}}"
       run_once: true
-    # Then shut down the Kafka service on all of the nodes in our cluster
-    - name: Stop kafka service
-      service:
-        name: kafka
-        state: stopped
-      become_user: root
-    # Find and remove any directories associated with that topic from the nodes
-    # in our cluster
-    - include: ../files/remove_topic_dirs.yml static=no
-      vars:
-        backup_topics: "{{action_hash.backup_topics | default(false)}}"
-      with_items: "{{action_hash.topic_list | default([])}}"
+    # now that the topics have been marked for deletion, roll through the
+    # members of the cluster and remove the topic directories from each of
+    # them (in turn); the metadata associated with those topics will also be
+    # removed from the Zookeeper instance/ensemble, but only after the topic
+    # directories have been removed from the first node in the cluster
+    - set_fact:
+        last_host: "{{play_hosts[(play_hosts|length)-1]}}"
+    - name: Perform rolling removal of topic directories and metadata
+      include: ../files/remove_topics_from_host.yml static=no
+      run_once: true
+      delegate_to: "{{current_host}}"
+      with_items: "{{play_hosts}}"
       loop_control:
-        loop_var: topic
-    # Remove the associated Zookeeper node from the Zookeeper ensemble by connecting
-    # to one of the instances via SSH from the Ansible host and runnign the appropriate
-    # `zkCli.sh rmr ...` command
-    - name: Remove corresponding nodes from remote Zookeeper ensemble
-      local_action: shell ssh -i '{{hostvars[zk_node].ansible_ssh_private_key_file}}' -p '{{hostvars[zk_node].ansible_ssh_port}}' {{hostvars[zk_node].ansible_ssh_user}}@{{hostvars[zk_node].ansible_ssh_host}} 'for topic in {{action_hash.topic_list | join(' ')}}; do sudo -u zookeeper {{remote_zookeeper_dir}}/bin/zkCli.sh rmr /brokers/topics/$topic; done'
-      register: test_output
-      become: false
-      failed_when: false
-      run_once: true
-      when: zk_node != 'localhost' and (action_hash.topic_list | default([])) != []
-    # Remove the associated Zookeeper node from the local Zookeeper instance by running
-    # the appropriate `zkCli.sh rmr ...` command (locally)
-    - name: Remove corresponding nodes from bundled Zookeeper instance
-      shell: "{{lcl_zk_shell_cmd}} localhost:2181 rmr /brokers/topics/{{item}}"
-      register: test_output
-      failed_when: false
-      with_items: "{{action_hash.topic_list | default([])}}"
-      run_once: true
-      when: zk_node == 'localhost'
-    # now that the topic has been removed from both Zookeeper and the nodes in our
-    # cluster it's safe to restart the Kafka service; when complete the topic will
-    # no longer show up on the cluster's list of topics
-    - name: Start kafka service
-      service:
-        name: kafka
-        state: started
-      become_user: root
+        loop_var: current_host
     # Finally, if this is an Apache Kafka distribution, delete the topic one more time
     # (this should ensure it disappears from such instances; without this step it seems
     # to come back in a "marked for deletion" state if the topic is created again later)

@@ -23,7 +23,7 @@
     shell: "tar -C {{kafka_data_dir}}/kafka -jcf {{kafka_data_dir}}/kafka/{{topic}}-archive-{{filename_timestamp}}.tar.bz2 {{topic_dirs | join(' ')}}"
     args:
       warn: no
-    when: construct_archive
+    when: construct_archive and topic_dirs != []
   - name: Remove matching topic directories from Kafka nodes
     file:
       path: "{{kafka_data_dir}}/kafka/{{item}}"

@@ -12,6 +12,9 @@ $ cat single-node-inventory
 
 192.168.34.2 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/test_node_private_key'
 
+[kafka]
+192.168.34.2
+
 $ 
 ```
 
@@ -20,8 +23,7 @@ Note that in this inventory file the `ansible_ssh_host` and `ansible_ssh_port` p
 Once we've built our static inventory file, we need to decide which Kafka distribution we want to deploy to our node. For purposes of this example, let's assume that we want to deploy the Confluent distribution (the default). To deploy the Confluent Kafka distribution to our single node, we would simply run an `ansible-playbook` command that looks something like this:
 
 ```bash
-$ ansible-playbook -i single-node-inventory -e "{ host_inventory: ['192.168.34.2'], \
-    provisioning: true }" site.yml
+$ ansible-playbook -i single-node-inventory provision-kafka.yml
 ```
 
 This will install the Confluent Kafka distribution as a set of packages, using the default package repository that is defined in the [templates/confluent-repo.j2](../templates/confluent-repo.j2) template, and configure the node as a single-node Kafka instance (using the default configuration parameters that are defined in the [vars/kafka.yml](../vars/kafka.yml) file). It should be noted here that When deploying a single-node Kafka instance, regardless of the distribution, an instance of Zookeeper will also be deployed locally on the same node. The Kafka instance will then be configured to work with that bundled Zookeeper instance.
@@ -29,8 +31,9 @@ This will install the Confluent Kafka distribution as a set of packages, using t
 If we wanted to deploy the Apache Kafka distribution to our node instead of the Confluent Kafka distribution, we could simply modify the `kafka_distro` flag that is passed into the playbook (either by modifying the value defined in the [vars/kafka.yml](../vars/kafka.yml) file or by passing in an extra variable that redefines the value from it's default value of `confluent`). If we take the second approach, this is what the `ansible-playbook` command for this simple deployment would look like:
 
 ```bash
-$ ansible-playbook -i single-node-inventory -e "{ host_inventory: ['192.168.34.2'], \
-    provisioning: true, kafka_distro: 'apache' }" site.yml
+$ ansible-playbook -i single-node-inventory -e "{ \
+      kafka_distro: 'apache' \
+    }" provision-kafka.yml
 ```
 
 This command will download the Apache Kafka distribution from the default URL defined in the [vars/kafka.yml](../vars/kafka.yml) file (the main Apache download site), unpack that distribution file into the `/opt/kafka` directory on that host (the default value for the location to unpack the distribution into), and configure both the bundled `zookeeper` instance and the `kafka` instance on that host, enable those services to start on boot, and (re)start them in that order (first `zookeeper`, then `kafka`).
@@ -49,44 +52,6 @@ $ cat test-cluster-inventory
 192.168.34.8 ansible_ssh_host=192.168.34.8 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
 192.168.34.9 ansible_ssh_host=192.168.34.9 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
 192.168.34.10 ansible_ssh_host=192.168.34.10 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
-
-$
-```
-
-To correctly configure our Kafka cluster to talk to the Zookeeper ensemble, the playbook will need to connect to the nodes that make up the associated Zookeeper ensemble and collect information from them, and to do so we'll have to pass in the information that Ansible will need to make those connections to the playbook. We do this by passing in a separate inventory file (the `zookeeper_inventory_file` for the deployment) that contains the inventory information for the members of the Zookeeper ensemble we will be associating with this Kafka cluster. For the purposes of this example, let's assume that our `zookeeper_inventory_file` looks something like this:
-
-```bash
-$ cat zookeeper-inventory
-# example inventory file for a clustered deployment
-
-192.168.34.18 ansible_ssh_host=192.168.34.18 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
-192.168.34.19 ansible_ssh_host=192.168.34.19 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
-192.168.34.20 ansible_ssh_host=192.168.34.20 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
-
-$
-```
-
-To deploy Kafka to the three nodes in our static inventory file, we'd run a command that looks something like this:
-
-```bash
-$ ansible-playbook -i test-cluster-inventory -e "{ \
-      host_inventory: ['192.168.34.8', '192.168.34.9', '192.168.34.10'], \
-      provisioning: true, inventory_type: static, data_iface: eth0, \
-      api_iface: eth1, zookeeper_inventory_file: './zookeeper-inventory', \
-      kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz', \
-      yum_repo_url: 'http://192.168.34.254/centos', kafka_data_dir: '/data' \
-    }" site.yml
-```
-
-You could also combine the inventory files for the Kafka and Zookeeper nodes into one file. However, to do so you need to define which nodes belong in which host group (`kafka` vs. `zookeeper`) by adding those host groups to the end of the file
-
-```bash
-$ cat combined-inventory
-# example combined inventory file for clustered deployment
-
-192.168.34.8 ansible_ssh_host=192.168.34.8 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
-192.168.34.9 ansible_ssh_host=192.168.34.9 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
-192.168.34.10 ansible_ssh_host=192.168.34.10 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/kafka_cluster_private_key'
 192.168.34.18 ansible_ssh_host=192.168.34.18 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
 192.168.34.19 ansible_ssh_host=192.168.34.19 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
 192.168.34.20 ansible_ssh_host=192.168.34.20 ansible_ssh_port=22 ansible_ssh_user='cloud-user' ansible_ssh_private_key_file='keys/zk_cluster_private_key'
@@ -101,41 +66,46 @@ $ cat combined-inventory
 192.168.34.19
 192.168.34.20
 
+$
 ```
 
-and that combined inventory file could then be passed into the `ansible-playbook` command:
+To deploy Kafka to the three nodes in our static inventory file, we'd run a command that looks something like this:
 
 ```bash
-$ ansible-playbook -i combined-inventory -e "{ \
-      host_inventory: ['192.168.34.8', '192.168.34.9', '192.168.34.10'], \
-      provisioning: true, inventory_type: static, data_iface: eth0, \
-      api_iface: eth1, zookeeper_inventory_file: './combined-inventory', \
+$ ansible-playbook -i test-cluster-inventory -e "{ \
+      data_iface: eth0, api_iface: eth1, \
       kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz', \
       yum_repo_url: 'http://192.168.34.254/centos', kafka_data_dir: '/data' \
-    }" site.yml
+    }" provision-kafka.yml
 ```
 
 Alternatively, rather than passing all of those arguments in on the command-line as extra variables, we can make use of the *local variables file* support that is built into this playbook and construct a YAML file that looks something like this containing the configuration parameters that are being used for this deployment:
 
 ```yaml
-inventory_type: static
-provisioning: true
 data_iface: eth0
 api_iface: eth1
-zookeeper_inventory_file: './combined-inventory'
 kafka_url: 'http://192.168.34.254/confluent/confluent-3.2.0.tar.gz'
 kafka_data_dir: 'http://192.168.34.254/centos'
-solr_data_dir: '/data'
+kafka_data_dir: '/data'
 ```
 
 and then we can pass in the *local variables file* as an argument to the `ansible-playbook` command; assuming the YAML file shown above was in the current working directory and was named `test-cluster-deployment-params.yml`, the resulting command would look somethin like this:
 
 ```bash
-$ ansible-playbook -i combined-inventory -e "{ \
-      host_inventory: ['192.168.34.8', '192.168.34.9', '192.168.34.10'], \
+$ ansible-playbook -i test-cluster-inventory -e "{ \
       local_vars_file: 'test-cluster-deployment-params.yml' \
-    }" site.yml
+    }" provision-kafka.yml
 ```
+
+As an aside, it should be noted here that the [provision-kafka.yml](../provision-kafka.yml) playbook includes a [shebang](https://en.wikipedia.org/wiki/Shebang_(Unix)) line at the beginning of the playbook file. As such, the playbook can be executed directly as a shell script (rather than using the file as the final input to an `ansible-playbook` command). This means that the command that was shown above could also be run as:
+
+```bash
+$ ./provision-kafka.yml -i test-cluster-inventory -e "{ \
+      local_vars_file: 'test-cluster-deployment-params.yml' \
+    }"
+```
+
+This form is available as a replacement for any of the `ansible-playbook` commands that we show here; which form you use will likely be a matter of personal preference (since both accomplish the same thing).
 
 Once the playbook run is complete, we can SSH into one of our nodes and run a few simple commands to check and make sure that Kafka has been successfully started and that the requested topics have been created successfully:
 
@@ -161,7 +131,7 @@ Additional checks could be performed (using the command-line tools to add messag
 In closing, this section showed how a single `ansible-playbook` command could be used to deploy a three-node Kafka cluster from a static inventory file, provided that there was already a Zookeeper ensemble up and running in the same network. 
 
 ## Scenario #3: deploying a Kafka cluster via dynamic inventory
-In this section we will repeat the multi-node cluster deployment that we just showed in the previous scenario, but we will use the dynamic inventory scripts provided in the [common-utils](../common-utils) submodule to control the deployment of our Kafka cluster to an AWS or OpenStack environment rather than relying on a static inventory file.
+In this section we will repeat the multi-node cluster deployment that we just showed in the previous scenario, but we will use the `build-app-host-groups` role that is provided in the [common-roles](../common-roles) submodule to control the deployment of our Kafka cluster (and integration of that cluster with an external Zookeeper ensemble) in an AWS or OpenStack environment rather than relying on a static inventory file.
 
 To accomplish this, the we have to:
 
@@ -179,12 +149,12 @@ In terms of what the commands look like, lets assume for this example that we've
 The `ansible-playbook` command used to deploy Kafka to our nodes and configure them as a cluster in an OpenStack environment would then look something like this:
 
 ```bash
-$ ansible-playbook -i common-utils/inventory/osp/openstack -e "{ \
-        host_inventory: 'meta-Application_kafka:&meta-Cloud_osp:&meta-Tenant_labs:&meta-Project_projectx:&meta-Domain_preprod', \
-        provisioning: true, application: kafka, cloud: osp, tenant: labs, project: projectx, domain: preprod, inventory_type: dynamic, \
-        ansible_user: cloud-user, private_key_path: './keys', data_iface: eth0, api_iface: eth1, \
+$ ansible-playbook -e "{ \
+        application: kafka, cloud: osp, \
+        tenant: labs, project: projectx, domain: preprod, \
+        private_key_path: './keys', data_iface: eth0, api_iface: eth1, \
         kafka_data_dir: '/data' \
-    }" site.yml
+    }" provision-kafka.yml
 ```
 
 The playbook then uses the tags in this playbook run to identify the nodes that make up the associated Zookeeper ensemble (which must be up and running for this playbook command to work) as well as the target nodes for the playbook run, installs the Confluent Kafka distribution on those nodes, and configures them as a new Kafka cluster. 
@@ -192,12 +162,12 @@ The playbook then uses the tags in this playbook run to identify the nodes that 
 In an AWS environment, the command would look something like this:
 
 ```bash
-$ ansible-playbook -i common-utils/inventory/aws/ec2 -e "{ \
-        host_inventory: 'tag_Application_kafka:&tag_Cloud_aws:&tag_Tenant_labs:&tag_Project_projectx:&tag_Domain_preprod', \
-        provisioning: true, application: kafka, cloud: aws, tenant: labs, project: projectx, domain: preprod, inventory_type: dynamic, \
-        ansible_user: cloud-user, private_key_path: './keys', data_iface: eth0, api_iface: eth1, \
+$ AWS_PROFILE=datanexus_west ansible-playbook -e "{ \
+        application: kafka, cloud: aws, \
+        tenant: labs, project: projectx, domain: preprod, \
+        private_key_path: './keys', data_iface: eth0, api_iface: eth1, \
         kafka_data_dir: '/data' \
-    }" site.yml
+    }" provision-kafka.yml
 ```
 
-As you can see, this command is basically the same command that was shown for the OpenStack use case; it only differs slightly in terms of the name of the inventory script passed in using the `-i, --inventory-file` command-line argument, the value passed in for `Cloud` tag (and the value for the associated `cloud` variable), and the prefix used when specifying the tags that should be matched in the `host_inventory` value (`tag_` instead of `meta-`). In both cases the result would be a set of nodes deployed as a Kafka cluster, with the number of nodes in the cluster determined (completely) by the tags that were assigned to the VMs in the cloud environment in question.
+As you can see, these two commands only in terms of the environment variable defined at the beginning of the command-line used to provision to the AWS environment (`AWS_PROFILE=datanexus_west`) and the value defined for the `cloud` variable (`osp` versus `aws`). In both cases the result would be a set of nodes deployed as a Kafka cluster, with those nodes configured to talk to each other through the associated (assumed to already be deployed) Zookeeper ensemble. The number of nodes in the Kafka cluster will be determined (completely) by the number of nodes in the OpenStack or AWS environment that have been tagged with a matching set of `application`, `tenant`, `project` and `domain` tags.

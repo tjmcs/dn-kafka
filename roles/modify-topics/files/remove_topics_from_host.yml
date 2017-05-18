@@ -20,7 +20,7 @@
 # the appropriate `zkCli.sh rmr ...` command
 - block:
   - name: If first node and remote Zookeeper ensemble, remove metadata from Zookeeper ensemble
-    local_action: shell ssh -i '{{hostvars[zk_node].ansible_ssh_private_key_file}}' -p '{{hostvars[zk_node].ansible_ssh_port}}' {{hostvars[zk_node].ansible_ssh_user}}@{{hostvars[zk_node].ansible_ssh_host}} 'for topic in {{action_hash.topic_list | join(' ')}}; do sudo -u zookeeper {{remote_zookeeper_dir}}/bin/zkCli.sh rmr /brokers/topics/$topic; done'
+    local_action: shell ssh -i '{{hostvars[zk_node].ansible_ssh_private_key_file}}' -p '{{hostvars[zk_node].ansible_ssh_port}}' {{ansible_user}}@{{hostvars[zk_node].ansible_ssh_host}} 'for topic in {{action_hash.topic_list | join(' ')}}; do sudo -u zookeeper {{remote_zookeeper_dir}}/bin/zkCli.sh rmr /brokers/topics/$topic; done'
     register: test_output
     become: false
     failed_when: false

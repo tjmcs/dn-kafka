@@ -1,10 +1,10 @@
 # Managing Connectors
 
-In addition to supporting the deployment of Kafka to one or more target nodes, the playbook in this repository also supports management of connectors and of workers in the connector framework in a deployed Kafka instance or cluster. Specifically, the playbook in this repository can be used to:
+The [modfy-connectors.yml](../modify-connectors.yml) playbook in this repository can be used to modify the connectors that are deployed to a Kafka instance or cluster. Specifically, the playbook in this playbook can be used to:
 
 * Add new connectors to the nodes in the cluster
 * Manage workers in the connector framework on those nodes, and
-* Manage instances of those connectors running on on the workers in the connector framework
+* Manage instances of the connectors on on the workers that are running within that connector framework
 
 We will describe these capabilities more in the sections that follow. The only assumption made is that the target nodes for the playbook run are actually members of a Kafka cluster and that the code for the connector framework was included in the deployment of that cluster (this is true, by default, for all recent versions of Kafka).
 
@@ -48,9 +48,6 @@ Then the local variables file for deployment of two new connectors (the `kafka-c
 ```bash
 $ cat local-vars-add-connectors.yml
 ---
-inventory_type: static
-modify_connectors: true
-zookeeper_inventory_file: './combined-inventory'
 data_iface: eth0
 api_iface: eth1
 action_hash:
@@ -67,14 +64,13 @@ And the `ansible-playbook` command to deploy those two connectors to the target 
 
 ```bash
 ansible-playbook -i combined-inventory -e "{ \
-    host_inventory: ['192.168.34.8','192.168.34.9','192.168.34.10'], \
     local_vars_file: 'local-vars-add-connectors.yml' \
-}" site.yml
+}" modify-connectors.yml
 ```
 
-Note that the deployment is actually driven by two parameters in the local variables file that is shown above: the `modify_connectors: true` value and the contents of the `action_hash` hash map. The first parameter is used to indicate that the playbook run shown above is going to modify the connectors on the target nodes. The second (the `action_hash` declares the action that should be taken (adding connectors) and then a list of the connectors that should be added.
+Note that the deployment is actually driven by the parameters that are defined in the `action_hash` variable shown above. The first parameter in the `action_hash` declares the action that should be taken (adding connectors) and the second the port that the worker instances are listening on (if a worker is not listening at this port, then a distributed worker instance will be started on that port). The third parameter defines a list of hashes containing the name that the connector should be added as (`kafka-connect-solr` for the first connector shown above) and the local file on the Ansible host that the connector code should be uploaded from (the playbook also supports specifying this as a `url` instead of a `local_file`; which you use will likely depend on the connector you are adding to the cluster).
 
-The other fields in this local variables file should be familiar to those of you who have already used a local variables file to control the deployment of Kafka to one or more target nodes. If you need more details on the definitions of these parameters, you can find a description of each of them [here](Supported-Config-Params.md).
+The other fields in this local variables file should be familiar to those of you who have already used a local variables file to control the deployment of Kafka to one or more target nodes, and their values should match the values that were used when the Kafka cluster was provisioned intially. If you need more details on the definitions of these parameters, you can find a description of each of them [here](Supported-Config-Params.md).
 
 The fields supported by the `action_hash` will vary depending on the action you are taking, so it's worth summarizing the supported fields for adding new connectors here:
 
@@ -123,7 +119,7 @@ drwxrwxr-x  0 vagrant vagrant     0 Apr 26 14:43 ./kafka-connect-solr/
 -rw-rw-r--  0 vagrant vagrant   16495 Apr 26 14:43 ./kafka-connect-solr/kafka-connect-solr-0.1.7.jar
 ```
 
-Furthermore, there is an assumption that the filename of the archive file includes a suffix that indicates its file type in a standard way (eg. `.tar`, `.tar.gz`, `.tgz`, `.tar.xz`, `.txz`, `.tar.bz`, `.tar.bz2`, `.tbz`, `.tbz2`, `.zip`). A combination of the suffix information for the file and it's MIME type will be used to determine how best to handle the file during the connector installation process, and if the suffix doesn't match the MIME type, then the file in question will be skipped.
+Furthermore, there is an assumption that the filename of the archive file includes a suffix that indicates its file type in a standard way (eg. `.tar`, `.tar.gz`, `.tgz`, `.tar.bz`, `.tar.bz2`, `.tbz`, `.tbz2`, `.zip`). A combination of the suffix information for the file and it's MIME type will be used to determine how best to handle the file during the connector installation process, and if the suffix doesn't match the MIME type, then the file in question will be skipped.
 
 If the MIME type and filename suffix do match, then the archive file will be unpacked and the JAR files that it contains will be copied over to a directory that the playbook run creates based on the `name` that was specified in the `connectors` entry for that connector in the `action_hash`. The location of that directory will depend on the `kafka_distro` that was specified in the local variables file (if this parameter is not specified, then the playbook run will assume that the target nodes are part of a Confluent Kafka cluster, and the connector code will be copied over to a subdirectory of the `/usr/share/java` subdirectory; if, on the other hand, this parameter is defined and has a value of `apache`, then the connector code will be copied over to a subdirectory of the `{kafka_dir}/libs` directory).
 
@@ -137,14 +133,11 @@ If the connector is provided to the playbook as a JAR (Java ARchive) file, then 
 
 ## Managing the Connector Framework
 
-Once the desired connectors have been installed locally on the nodes that make up our cluster, the next step necessary (before we can deploy instances of those connectors locally) is to start workers in the connector framework on our target nodes (or restart the workers running the connector framework if we are adding new connectors to the framework and there are already workers running locally). Fortunately, the playbook in this repository supports the management of the workers running in the connector framework on a set of one or more target nodes via an `ansible-playbook` run. As was the case with adding new connectors to our nodes (above), a local variables file can be created to control this process. Here is an example of such a file:
+Once the desired connectors have been installed locally on the nodes that make up our cluster, the next step necessary (before we can deploy instances of those connectors locally) is to start workers in the connector framework on our target nodes (or restart the workers running the connector framework if we are adding new connectors to the framework and there are already workers running locally). Fortunately, the [modfy-connectors.yml](../modify-connectors.yml) playbook in this repository supports the management of the workers running in the connector framework on a set of one or more target nodes via an `ansible-playbook` run. As was the case with adding new connectors to our nodes (above), a local variables file can be created to control this process. Here is an example of such a file:
 
 ```bash
 $ cat local-vars-start-worker.yml
 ---
-inventory_type: static
-modify_connectors: true
-zookeeper_inventory_file: './combined-inventory'
 data_iface: eth0
 api_iface: eth1
 action_hash:
@@ -153,7 +146,7 @@ action_hash:
   group_id: solrcloud-group
 ```
 
-As was the case with the previous example (above), we using the `modify_connectors: true` setting in this local variables file to invoke the plays that are used to modify connectors in our playbook run. In this case, the `action` parameter in our `action_hash` has been set to `start-worker`, which indicates that we should invoke the tasks involved in starting a new worker in the connector framework. When managing the worker instances running in the connector framework using the playbook in this repository, the `action` parameter in the `action_hash` can take any of the following values:
+As was the case with the previous example (above), we are using the parameters defined in the `action_hash` in this file to control the actions taken during the playbook run. In this case, the `action` parameter in our `action_hash` has been set to `start-worker`, which indicates that we should invoke the tasks involved in starting a new worker in the connector framework. When managing the worker instances running in the connector framework using the playbook in this repository, the `action` parameter in the `action_hash` can take any of the following values:
 
 * **`start-worker`**: if it is not running, then the a worker will be started in the connector framework on each of the target nodes
 * **`stop-worker`**: if it is running, then a worker instance in connector framework is stopped on each of the target nodes
@@ -171,16 +164,13 @@ When starting a worker instance in the connector framework, there are a number o
 * **`rest_port`**: the port that the worker's REST API should listen on; defaults to `8083` if not specified
 * **`group_id`**: a unique string that identifies the Connect cluster group that this worker belongs to; defaults to `default_group` if not specified
 
-It should be noted here that when starting a new worker instance in the connector framework, the topics named in the configuration will be created automatically if they do not currently exist as part of the `ansible-playbook` run. It should also be noted that when starting a new worker instance, if there is already an instance running at the named port that response to a `GET /connectors` RESTful query, the playbook will not attempt to restart that instance.
+It should be noted here that when starting a new worker instance in the connector framework, the topics named in the configuration will be created automatically, if they do not currently exist, as part of the `ansible-playbook` run. It should also be noted that when starting a new worker instance, if there is already an instance running at the named port that response to a `GET /connectors` RESTful query, the playbook will not attempt to restart that instance.
 
 Stopping or restarting a worker instance is a much simpler process. The only parameter from the list shown above that is important for these two commands is the `rest_port` parameter. If we use a local variables file that looks something like the following in our `ansible-playbook` run:
 
 ```bash
 $ cat local-vars-stop-worker.yml
 ---
-inventory_type: static
-modify_connectors: true
-zookeeper_inventory_file: './combined-inventory'
 data_iface: eth0
 api_iface: eth1
 action_hash:
@@ -193,9 +183,6 @@ then the worker instance listening at port 8083 will be stopped on all of the ta
 ```bash
 $ cat local-vars-restart-worker.yml
 ---
-inventory_type: static
-modify_connectors: true
-zookeeper_inventory_file: './combined-inventory'
 data_iface: eth0
 api_iface: eth1
 action_hash:
@@ -221,9 +208,6 @@ Each of these actions relies on a `name` that must be defined as part of the `ac
 ```bash
 cat local-vars-start-connectors.yml
 ---
-inventory_type: static
-modify_connectors: true
-zookeeper_inventory_file: './combined-inventory'
 data_iface: eth0
 api_iface: eth1
 action_hash:
@@ -261,9 +245,6 @@ Updating the configuration of an existing connector (or a set of existing connec
 ```bash
 cat local-vars-update-connector-configs.yml
 ---
-inventory_type: static
-modify_connectors: true
-zookeeper_inventory_file: './combined-inventory'
 data_iface: eth0
 api_iface: eth1
 action_hash:
@@ -297,9 +278,6 @@ The remaining actions (restarting, pausing, resuming, and removing named connect
 ```bash
 cat local-vars-pause-connectors.yml
 ---
-inventory_type: static
-modify_connectors: true
-zookeeper_inventory_file: './combined-inventory'
 data_iface: eth0
 api_iface: eth1
 action_hash:

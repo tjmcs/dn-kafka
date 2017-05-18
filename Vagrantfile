@@ -28,10 +28,9 @@ def addr_list_from_inventory_file(inventory_file, group_name)
   inventory_json = JSON.parse(inventory_str)
   inventory_group = inventory_json[group_name]
   # if we found a corresponding group in the inventory file, then
-  # return the hosts list in that group
-  return inventory_group['hosts'] if inventory_group
-  # otherwise, return the keys in the 'hostvars' hash map under the '_meta' hash map
-  inventory_json['_meta']['hostvars'].keys
+  # return the hosts list in that group, otherwise, return the keys
+  # in the 'hostvars' hash map under the '_meta' hash map
+  (inventory_group ? inventory_group['hosts'] : inventory_json['_meta']['hostvars'].keys)
 end
 
 # initialize a few values
@@ -239,7 +238,8 @@ if provisioning_command || ip_required
           print "       provisioning a Kafka cluster\n"
           exit 1
         else
-          # parse the inventory file that was passed in and retrieve the list of host addresses from it
+          # parse the inventory file that was passed in and retrieve the list
+          # of zookeeper hosts from it
           zookeeper_addr_array = addr_list_from_inventory_file(options[:inventory_file], 'zookeeper')
           # and check to make sure that an appropriate number of zookeeper addresses were
           # found in the inventory file (the size of the ensemble should be an odd number
@@ -308,24 +308,32 @@ if kafka_addr_array.size > 0
     # creating VMs, create a VM for each machine; if we're just provisioning the
     # VMs using an ansible playbook, then wait until the last VM in the loop and
     # trigger the playbook runs for all of the nodes simultaneously using the
-    # `site.yml` playbook
+    # `provision-kafka.yml` playbook
     kafka_addr_array.each do |machine_addr|
       config.vm.define machine_addr do |machine|
-        # Create a two private networks, which each allow host-only access to the machine
-        # using a specific IP.
+        # disable the default synced folder
+        machine.vm.synced_folder ".", "/vagrant", disabled: true
+        # Create a a private network, which each allow host-only access to
+        # the machine using a specific IP.
         machine.vm.network "private_network", ip: machine_addr
         # if it's the last node in the list if input addresses, then provision
         # all of the nodes simultaneously (if the `--no-provision` flag was not
         # set, of course)
         if machine_addr == kafka_addr_array[-1]
-          # now, use the playbook in the `site.yml' file to provision our
-          # nodes with kafka (and configure them as a cluster if there
-          # is more than one node)
+          if options[:inventory_file]
+            if !File.directory?('.vagrant/provisioners/ansible/inventory')
+              mkdir_output = `mkdir -p .vagrant/provisioners/ansible/inventory`
+            end
+            ln_output = `ln -sf #{File.expand_path(options[:inventory_file])} .vagrant/provisioners/ansible/inventory`
+          end
+          # now, use the playbook in the `provision-kafka.yml' file to
+          # provision our nodes with kafka (and configure them as a cluster if
+          # there is more than one node)
           machine.vm.provision "ansible" do |ansible|
-            # set the limit to 'all' in order to provision all of machines on the
-            # list in a single playbook run
+            # set the limit to 'all' in order to provision all of machines on
+            # the list in a single playbook run
             ansible.limit = "all"
-            ansible.playbook = "site.yml"
+            ansible.playbook = "provision-kafka.yml"
             ansible.groups = {
               kafka: kafka_addr_array
             }
@@ -336,15 +344,8 @@ if kafka_addr_array.size > 0
                 proxy_username: proxy_username,
                 proxy_password: proxy_password
               },
-              provisioning: true,
               data_iface: "eth1",
-              api_iface: "eth1",
-              kafka_distro: options[:kafka_distro],
-              yum_repo_url: options[:yum_repo_url],
-              host_inventory: kafka_addr_array,
-              reset_proxy_settings: options[:reset_proxy_settings],
-              zookeeper_inventory_file: options[:inventory_file],
-              inventory_type: "static"
+              api_iface: "eth1"
             }
             # if a value was found for `local_kafka_dist_dir`, then pass it into
             # the playbook as an extra variable, otherwise if a value was found
@@ -353,6 +354,16 @@ if kafka_addr_array.size > 0
               ansible.extra_vars[:local_kafka_path] = local_kafka_dist_dir
             elsif local_kafka_dist_file
               ansible.extra_vars[:local_kafka_file] = local_kafka_dist_file
+            end
+            # if a local yum repositiory  was set, then set an extra variable
+            # containing the named repository
+            if options[:yum_repo_url]
+              ansible.extra_vars[:yum_repo_url] = options[:yum_repo_url]
+            end
+            # if the flag to reset the proxy settings was set, then set an extra variable
+            # containing that value
+            if options[:reset_proxy_settings]
+              ansible.extra_vars[:reset_proxy_settings] = options[:reset_proxy_settings]
             end
             # if a kafka log directory was set, then set an extra variable
             # containing the named directory

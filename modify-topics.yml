@@ -1,0 +1,70 @@
+#!/usr/bin/env ansible-playbook
+#
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+---
+# Build our kafka and zookeeper host groups
+- name: Create kafka and zookeeper host groups
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    # if we're using dynamic provisioning; build the host groups from the
+    # meta-data associated with the matching nodes in the selected cloud
+    - block:
+      # load the 'local variables file', if one was defined, to get any variables
+      # we might need from that file when constructing our host groups
+      - name: Load local variables file
+        include_vars:
+          file: "{{local_vars_file}}"
+        when: not (local_vars_file is undefined or local_vars_file is none or local_vars_file | trim == '')
+      # then, build our host groups
+      - include_role:
+          name: build-app-host-groups
+        vars:
+          host_group_list:
+            - name: kafka
+            - name: zookeeper
+      when: cloud is defined and (cloud == 'aws' or cloud == 'osp')
+
+# Collect some Zookeeper related facts and determine the "private" IP addresses of
+# the nodes in the Zookeeper ensemble (from their "public" IP addresses and the `data_iface`
+# variable that was passed in as part of this playbook run) if a list of "public"  Zookeeper
+# IP addresses was passed in.
+- name: Gather facts from Zookeeper host group (if defined)
+  hosts: zookeeper
+  tasks: []
+
+# If we're adding/removing topics, then connect to the Kafka cluster and perform the
+# necessary actions to do so
+- name: Configure Kafka topics
+  hosts: kafka
+  gather_facts: no
+  vars_files:
+    - vars/kafka.yml
+  vars:
+    - zookeeper_nodes: "{{groups['zookeeper']}}"
+  pre_tasks:
+    # first, load the local variables file (if one was defined); this will initialize
+    # the variables used in our playbook (and override any values in the 'vars/kafka.yml'
+    # file with redefined values from the 'local_vars_file', if any)
+    - name: Load local variables file (if defined)
+      include_vars:
+        file: "{{local_vars_file}}"
+      when: not (local_vars_file is undefined or local_vars_file is none or local_vars_file | trim == '')
+    - name: Gather facts from the Kafka node(s)
+      setup:
+    # next, we obtain the interface names for our data_iface
+    # and api_iface (provided an interface description was provided for each)
+    - include_role:
+        name: get-iface-names
+      vars:
+        iface_descriptions: "{{iface_description_array}}"
+      when: not (iface_description_array is undefined or iface_description_array == [])
+    # and now that we know we have our data_iface identified, we can construct
+    # the list of zk_nodes (the data_iface IP addresses of our zookeeper_nodes)
+    - set_fact:
+        zk_nodes: "{{(zookeeper_nodes | default([])) | map('extract', hostvars, [('ansible_' + data_iface), 'ipv4', 'address']) | list}}"
+  # Now that we have all of the facts we need we can proceed to modify the topics
+  # if that's what we're doing (add new topics to or remove existing topics from
+  # the cluster)
+  roles:
+    - role: modify-topics

@@ -88,7 +88,7 @@ metrics
 So, to recap, by using a single `vagrant ... up` command we were able to quickly spin up a cluster consisting of of three Kafka nodes and configure those nodes as a cluster that is associated with an existing Zookeeper ensemble. A similar `vagrant ... up` command could be used to build a cluster consisting of any number of Kafka nodes, provided that a Zookeeper ensemble has already been provisioned that can be associated with the nodes in that cluster.
 
 ## Separating instance creation from provisioning
-While the `vagrant up` commands that are shown above can be used to easily deploy Kafka to a single node or to build a Kafka cluster consisting of multiple nodes, the [Vagrantfile](../Vagrantfile) included in this distribution also supports separating out the creation of the virtual machine from the provisioning of that virtual machine using the Ansible playbook contained in this repository's [site.yml](../site.yml) file.
+While the `vagrant up` commands that are shown above can be used to easily deploy Kafka to a single node or to build a Kafka cluster consisting of multiple nodes, the [Vagrantfile](../Vagrantfile) included in this distribution also supports separating out the creation of the virtual machine from the provisioning of that virtual machine using the Ansible playbook contained in this repository's [provision-kafka.yml](../provision-kafka.yml) file.
 
 To create a set of virtual machines that we plan on using to build a Kafka cluster without provisioning Kafka to those machines, simply run a command similar to the following:
 
@@ -106,7 +106,7 @@ $ vagrant -k="192.168.34.8,192.168.34.9,192.168.34.10" \
     -i='./combined_inventory' provision
 ```
 
-That command will attach to the named instances and run the playbook in this repository's [site.yml](../site.yml) file on those node, resulting in a Kafka cluster consisting of the nodes that were created in the `vagrant ... up --no-provision` command that was shown, above.
+That command will attach to the named instances and run the playbook in this repository's [provision-kafka.yml](../provision-kafka.yml) file on those node, resulting in a Kafka cluster consisting of the nodes that were created in the `vagrant ... up --no-provision` command that was shown, above.
 
 ## Additional vagrant deployment options
 While the commands shown above will install Kafka with a reasonable, default configuration from a standard location, there are additional command-line parameters that can be used to control the deployment process triggered by a `vagrant ... up` or `vagrant ... provision` command. Here is a complete list of the command-line flags that can be supported by the [Vagrantfile](../Vagrantfile) in this repository:

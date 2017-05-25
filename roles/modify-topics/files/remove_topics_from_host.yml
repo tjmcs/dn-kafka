@@ -35,7 +35,7 @@
     with_items: "{{action_hash.topic_list | default([])}}"
     run_once: true
     when: zk_node == 'localhost'
-  when: current_host == play_hosts[0]
+  when: current_host == ansible_play_hosts[0]
 # now that the topic has been removed from both Zookeeper and the nodes in our
 # cluster it's safe to restart the Kafka service; when complete the topic will
 # no longer show up on the cluster's list of topics

@@ -1,6 +1,6 @@
 #!/usr/bin/env ansible-playbook
 #
-# (c) 2016 DataNexus Inc.  All Rights Reserved
+# (c) 2017 DataNexus Inc.  All Rights Reserved
 ---
 # Build our kafka and zookeeper host groups
 - name: Create kafka and zookeeper host groups
@@ -30,9 +30,9 @@
   hosts: zookeeper
   tasks: []
 
-# And deploy Kafka to the nodes in the `kafka` host group; note that if
-# there is more than one node in the `kafka` host group, those nodes will be
-# configured as a Kafka cluster
+# Then, deploy Kafka to the new target nodes (those that don't have a
+# kafka service configured on them already) and configure those nodes to
+# join the existing cluster
 - name: Install/configure Kafka server(s)
   hosts: kafka
   gather_facts: no
@@ -53,6 +53,6 @@
     # list of zk_nodes (the data_iface IP addresses of our zookeeper_nodes)
     - set_fact:
         zk_nodes: "{{(zookeeper_nodes | default([])) | map('extract', hostvars, [('ansible_' + data_iface), 'ipv4', 'address']) | list}}"
-  # now that we have all of the facts we need, provision the input nodes
+  # now that we have all of the facts we need, add the new nodes to the cluster
   roles:
-    - role: provision-nodes
+    - role: add-nodes

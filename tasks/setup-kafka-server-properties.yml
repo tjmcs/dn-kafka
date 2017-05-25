@@ -5,8 +5,7 @@
 # files correctly
 - set_fact:
     kfka_nodes: "{{kafka_nodes | map('extract', hostvars, [('ansible_' + data_iface), 'ipv4', 'address']) | list}}"
-- set_fact:
-    num_hosts: "{{ kfka_nodes | length }}"
+    num_hosts: "{{(kafka_nodes + (existing_nodes | default([]))) | length}}"
 - block:
   - name: Configure kafka server instance listener address
     replace:
@@ -28,7 +27,7 @@
     lineinfile:
       dest: "{{kafka_config_dir}}/server.properties"
       regexp: "^broker.id="
-      line: "broker.id={{item.0}}"
+      line: "broker.id={{item.0 + ((existing_node_count | default('0')) | int)}}"
     with_indexed_items: "{{kfka_nodes}}"
     when: (num_hosts | int > 1) and (data_addr == item.1)
   - name: setup confluent-schema-registry listener if deploying a Confluent cluster

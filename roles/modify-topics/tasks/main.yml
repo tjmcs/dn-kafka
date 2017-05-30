@@ -60,12 +60,12 @@
     # removed from the Zookeeper instance/ensemble, but only after the topic
     # directories have been removed from the first node in the cluster
     - set_fact:
-        last_host: "{{play_hosts[(play_hosts|length)-1]}}"
+        last_host: "{{ansible_play_hosts[(ansible_play_hosts|length)-1]}}"
     - name: Perform rolling removal of topic directories and metadata
       include: ../files/remove_topics_from_host.yml static=no
       run_once: true
       delegate_to: "{{current_host}}"
-      with_items: "{{play_hosts}}"
+      with_items: "{{ansible_play_hosts}}"
       loop_control:
         loop_var: current_host
     # Finally, if this is an Apache Kafka distribution, delete the topic one more time

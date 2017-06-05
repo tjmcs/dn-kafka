@@ -19,22 +19,6 @@
       jar_mime_types:
         - 'application/zip'
         - 'application/x-zip'
-  # if the action is 'start-worker', then start the a worker in the connector
-  # framework in distributed mode
-  - include: manage-connector-workers.yml static=no
-    vars:
-      connector_worker_url: "http://{{data_addr}}:{{action_hash.worker_port | default(8083)}}/connectors"
-      key_converter: "{{action_hash.key_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
-      value_converter: "{{action_hash.value_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
-      internal_key_converter: "{{action_hash.internal_key_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
-      internal_value_converter: "{{action_hash.internal_value_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
-      offset_topic: "{{action_hash.offset_topic | default('connect-offsets')}}"
-      config_topic: "{{action_hash.config_topic | default('connect-configs')}}"
-      status_topic: "{{action_hash.status_topic | default('connect-status')}}"
-      rest_port: "{{action_hash.worker_port | default(8083)}}"
-      group_id: "{{action_hash.group_id | default('default_group')}}"
-      action: "{{action_hash.action}}"
-    when: ([(action_hash.action | default (''))] | intersect(['start-worker', 'stop-worker', 'restart-worker'])) != []
   # if the action is 'add', then loop through the connectors that are being
   # added and add each of them, in turn, to the target nodes based on the
   # information in the corresponding 'action_hash' entry
@@ -43,9 +27,44 @@
       connector_name: "{{item.name}}"
       local_connector_file: "{{item.local_file | default('')}}"
       connector_url: "{{item.connector_url | default('')}}"
+      post_install_tasks: "{{item.post_install_tasks | default([])}}"
     with_items: "{{action_hash.connectors | default([])}}"
     when: (action_hash.action | default ('')) == 'add'
-  # if the action is 'start', 'update', 'pause', 'resume', or 'remove' then
+  # if the action is 'start-worker', 'stop-worker', or 'restart-worker', then
+  # start, stop, or restart the defined worker in the connector framework in
+  # distributed mode
+  - include: manage-connector-workers.yml static=no
+    vars:
+      # properties set for key converter
+      key_converter: "{{action_hash.key_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
+      key_converter_schemas_enable: "{{action_hash.key_converter_schemas_enable | default('false')}}"
+      key_converter_schema_registry_url: "{{((action_hash.key_converter_schemas_enable | default('false')) == 'true') | ternary('http://' + api_addr + ':8081','')}}"
+      # properties set for value converter
+      value_converter: "{{action_hash.value_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
+      value_converter_schemas_enable: "{{action_hash.value_converter_schemas_enable | default('false')}}"
+      value_converter_schema_registry_url: "{{((action_hash.value_converter_schemas_enable | default('false')) == 'true') | ternary('http://' + api_addr + ':8081','')}}"
+      # properties set for internal key converter
+      internal_key_converter: "{{action_hash.internal_key_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
+      internal_key_converter_schemas_enable: "{{action_hash.internal_key_converter_schemas_enable | default('false')}}"
+      internal_key_converter_schema_registry_url: "{{((action_hash.internal_key_converter_schemas_enable | default('false')) == 'true') | ternary('http://' + api_addr + ':8081','')}}"
+      # properties set for internal value converter
+      internal_value_converter: "{{action_hash.internal_value_converter | default('org.apache.kafka.connect.json.JsonConverter')}}"
+      internal_value_converter_schemas_enable: "{{action_hash.internal_value_converter_schemas_enable | default('false')}}"
+      internal_value_converter_schema_registry_url: "{{((action_hash.internal_value_converter_schemas_enable | default('false')) == 'true') | ternary('http://' + api_addr + ':8081','')}}"
+      # topics used by connectors to store offset, configuration, and status information
+      offset_topic: "{{action_hash.offset_topic | default('connect-offsets')}}"
+      config_topic: "{{action_hash.config_topic | default('connect-configs')}}"
+      status_topic: "{{action_hash.status_topic | default('connect-status')}}"
+      # worker specific configuration parameters
+      rest_port: "{{action_hash.worker_port | default(8083)}}"
+      group_id: "{{action_hash.group_id | default('default_group')}}"
+      worker_name: "{{action_hash.name | default('')}}"
+      worker_classpath: "{{action_hash.worker_classpath | default('')}}"
+      connector_worker_url: "http://{{api_addr}}:{{action_hash.worker_port | default(8083)}}/connectors"
+      # the action we're taking
+      action: "{{action_hash.action}}"
+    when: ([(action_hash.action | default (''))] | intersect(['start-worker', 'stop-worker', 'restart-worker'])) != []
+  # if the action is 'create', 'update', 'pause', 'resume', or 'delete' then
   # loop through the connectors in the 'action_hash' and perform the
   # corresponding action on each of them, in turn, using the information in
   # the corresponding 'action_hash' entry
@@ -53,8 +72,8 @@
     vars:
       connector_name: "{{item.name}}"
       connector_config: "{{item.config | default({})}}"
-      connector_worker_url: "http://{{data_addr}}:{{action_hash.worker_port | default(8083)}}/connectors"
+      connector_worker_url: "http://{{api_addr}}:{{action_hash.worker_port | default(8083)}}/connectors"
       action: "{{action_hash.action}}"
     with_items: "{{action_hash.connectors | default([])}}"
-    when: ([(action_hash.action | default (''))] | intersect(['start', 'restart', 'update', 'pause', 'resume', 'remove'])) != []
+    when: ([(action_hash.action | default (''))] | intersect(['create', 'restart', 'update', 'pause', 'resume', 'delete'])) != []
   when: (action_hash | default({})) != {}

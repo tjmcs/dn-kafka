@@ -2,8 +2,15 @@
 ---
 # if a connector worker is not already running at the named URL, then
 # start a new connector worker in distributed mode
-- set_fact:
+- name: Set some facts we'll use later
+  set_fact:
     kfka_nodes: "{{kafka_nodes | map('extract', hostvars, [('ansible_' + data_iface), 'ipv4', 'address']) | list}}"
+    worker_props_filename: "{{(worker_name != '') | ternary('worker-' + worker_name + '.properties', 'worker.properties')}}"
+    worker_grep_str: "{{(worker_name != '') | ternary(' | grep ' + worker_name, '')}}"
+    worker_cp_prefix: "{{(worker_classpath != '') | ternary('CLASSPATH=\"' + worker_classpath + '\" ', '')}}"
+    kafka_topics_cmd: "{{(kafka_distro == 'apache') | ternary(kafka_dir + '/bin/kafka-topics.sh', 'kafka-topics')}}"
+    zk_node_str: "{{(zk_nodes | default(['localhost'])) | join(':2181,')}}:2181"
+    topic_repl_factor: "{{[3,(kafka_nodes | length)] | min}}"
 - name: Check to see if a connector worker is already running
   uri:
     method: GET
@@ -15,22 +22,24 @@
 # create the topics used to store configurations, offsets, and status (unless
 # they already exist, in which case this action will do nothing); start by
 # retrieving a list of the currently defined topics
-- name: Choose a zookeeper node from the ZK cluster when defined
-  set_fact: zk_node={{zk_nodes | random}}
-  when: zk_nodes is defined and zk_nodes != []
-- set_fact:
-    kafka_topics_cmd: "{{kafka_dir}}/bin/kafka-topics.sh"
-  when: kafka_distro == 'apache'
 - name: Get list of topics currently available
-  shell: "{{kafka_topics_cmd | default('kafka-topics')}} --zookeeper {{zk_node | default('localhost')}}:2181 --list"
+  shell: "{{kafka_topics_cmd}} --zookeeper={{zk_node_str}} --list"
   register: kafka_topics_out
+  when: action == 'start-worker'
 # then, if the list of topics was successfully retrieved, create any of the
 # topics we need that do not exist in the currently defined list of topics
-- debug: msg="{{[offset_topic,config_topic,status_topic]}}"
 - block:
-  - name: Create topics used by the worker instance
-    shell: "{{kafka_topics_cmd | default('kafka-topics')}} --create --zookeeper {{zk_node}}:2181 --replication-factor 1 --partitions 1 --topic {{ item }}"
-    with_items: "{{[offset_topic,config_topic,status_topic] | difference(kafka_topics_out.stdout_lines)}}"
+  - name: Determine which of the worker-related topics need to be created
+    set_fact:
+      list_topics_create: "{{[offset_topic,config_topic,status_topic] | difference(kafka_topics_out.stdout_lines)}}"
+    run_once: true
+  - name: Create topics used by the worker
+    shell: "{{kafka_topics_cmd}} --create --zookeeper={{zk_node_str}} --replication-factor={{topic_repl_factor}} --partitions={{item.partitions}} --topic={{item.name}}"
+    with_items:
+     - { name: "{{offset_topic}}", partitions: 50}
+     - { name: "{{config_topic}}", partitions: 1}
+     - { name: "{{status_topic}}", partitions: 10}
+    when: item.name in list_topics_create
     register: command_result
     failed_when:
       - "'already exists' not in command_result.stdout"
@@ -38,34 +47,80 @@
     run_once: true
     become_user: kafka
   become: true
-  when: kafka_topics_out.rc == 0
+  when: action == 'start-worker' and kafka_topics_out.rc == 0
 # if a worker is not running at the named URL and we've been asked to start
 # a connector worker, then start it
 - block:
   # first, construct a properties file from the worker_properties hash and
   # the cluster configuration
-  - name: Ensure directory for worker.properties file exists
+  - name: Ensure directory for worker properties file exists
     file:
       path: "/etc/kafka-connectors"
       state: directory
       owner: kafka
       group: kafka
       mode: 0755
-  - name: Create worker.properties file
+  - name: Create {{worker_props_filename}} file
     template:
       src: worker.properties.j2
-      dest: /etc/kafka-connectors/worker.properties
+      dest: "/etc/kafka-connectors/{{worker_props_filename}}"
       owner: kafka
       group: kafka
       mode: 0644
-  # then, use that worker.properties file to start the connector worker via
+  # if additional configuration parameters were passed in, then set the corresponding
+  # parameters in the worker properties file
+  - name: Setup additional configuration options
+    lineinfile:
+      dest: "/etc/kafka-connectors/{{worker_props_filename}}"
+      line: "{{item.name}}={{item.value}}"
+      insertafter: "{{item.insertafter}}"
+      state: present
+    with_items:
+      # set flag to enable converter schemas?
+      - name: "key.converter.schemas.enable"
+        value: "{{key_converter_schemas_enable}}"
+        nil_val: "true"
+        insertafter: "^key.converter="
+      - name: "value.converter.schemas.enable"
+        value: "{{value_converter_schemas_enable}}"
+        nil_val: "true"
+        insertafter: "^value.converter="
+      # set schema registry URL?
+      - name: "key.converter.schema.registry.url"
+        value: "{{key_converter_schema_registry_url}}"
+        nil_val: ""
+        insertafter: "^key.converter="
+      - name: "value.converter.schema.registry.url"
+        value: "{{value_converter_schema_registry_url}}"
+        nil_val: ""
+        insertafter: "^value.converter="
+      # set flag to enable internal converter schemas?
+      - name: "internal.key.converter.schemas.enable"
+        value: "{{internal_key_converter_schemas_enable}}"
+        nil_val: "true"
+        insertafter: "^internal.key.converter="
+      - name: "internal.value.converter.schemas.enable"
+        value: "{{internal_value_converter_schemas_enable}}"
+        nil_val: "true"
+        insertafter: "^internal.value.converter="
+      # set internal schema registry URL?
+      - name: "internal.key.converter.schema.registry.url"
+        value: "{{internal_key_converter_schema_registry_url}}"
+        nil_val: ""
+        insertafter: "^internal.key.converter="
+      - name: "internal.value.converter.schema.registry.url"
+        value: "{{internal_value_converter_schema_registry_url}}"
+        nil_val: ""
+        insertafter: "^internal.value.converter="
+    when: item.value != item.nil_val
+  # then, use that '{{worker_props_filename}}' file to start the connector worker via
   # the 'connect-distributed' command in 'daemon mode'
-  - name: Start connector worker
-    shell: "connect-distributed -daemon /etc/kafka-connectors/worker.properties"
+  - name: Start worker
+    shell: "{{worker_cp_prefix}}connect-distributed -daemon /etc/kafka-connectors/{{worker_props_filename}}"
     become_user: kafka
   become: true
   when:
-    - "{{'Connection refused' in returned_content.msg}}"
+    - "'Connection refused' in returned_content.msg"
     - returned_content.status == -1
     - action == 'start-worker'
 # if a worker is running at the named URL and we've been asked to stop
@@ -73,11 +128,12 @@
 - block:
     # get the process ID of the daemon
     - name: Get process ID for daemon
-      shell:  "ps aux | grep org.apache.kafka.connect.cli.ConnectDistributed | grep -v grep | awk '{print $2}'"
+      shell:  "ps aux | grep org.apache.kafka.connect.cli.ConnectDistributed{{worker_grep_str}} | grep -v grep | awk '{print $2}'"
       register: ps_output
     # and kill that process ID
     - name: Kill that process ID
       shell: "kill {{ps_output.stdout_lines.0}}"
+      when: ps_output.stdout_lines != []
   become: true
   when: returned_content.status == 200 and action == 'stop-worker'
 # if the worker is running at the named URL and we've been asked to restart it,
@@ -85,14 +141,15 @@
 - block:
     # get the process ID of the daemon
     - name: Get process ID for daemon
-      shell:  "ps aux | grep org.apache.kafka.connect.cli.ConnectDistributed | grep -v grep | awk '{print $2}'"
+      shell:  "ps aux | grep org.apache.kafka.connect.cli.ConnectDistributed{{worker_grep_str}} | grep -v grep | awk '{print $2}'"
       register: ps_output
     # and kill that process ID
     - name: Kill that process ID and sleep
       shell: "kill {{ps_output.stdout_lines.0}}; sleep 5"
+      when: ps_output.stdout_lines != []
     # and restart the daemon with the same worker properties used when it was created
     - name: Restart the daemon
-      shell: "connect-distributed -daemon /etc/kafka-connectors/worker.properties"
+      shell: "{{worker_cp_prefix}}connect-distributed -daemon /etc/kafka-connectors/{{worker_props_filename}}"
       become_user: kafka
   become: true
   when: returned_content.status == 200 and action == 'restart-worker'

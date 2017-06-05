@@ -41,6 +41,7 @@
   vars_files:
     - vars/kafka.yml
   vars:
+    - kafka_nodes: "{{groups['kafka']}}"
     - zookeeper_nodes: "{{groups['zookeeper']}}"
   pre_tasks:
     # first, load the local variables file (if one was defined); this will initialize

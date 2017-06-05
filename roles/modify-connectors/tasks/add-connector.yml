@@ -49,7 +49,7 @@
     mime: yes
   register: stat_out
 - set_fact:
-    file_type: "{{stat_out.stat.mime_type}}"
+    file_type: "{{stat_out.stat.mimetype}}"
 # set a fact containing the connector directory and a set of facts based on the mime-type
 # of the file and the file's extension (determined above); these latter facts are used to
 # determine how the file should be handled (we can't just rely on the MIME type since some
@@ -100,7 +100,7 @@
 # directory, copy the files unpacked into the connector directory, and clean up
 # the temporary files we created
 - block:
-  - name: Unpack kafka distribution into /tmp directory
+  - name: Unpack connector distribution into /tmp directory
     unarchive:
       copy: no
       src: "/tmp/{{local_filename}}"
@@ -154,3 +154,12 @@
       state: absent
   become: true
   when: file_has_jar_ext and is_jar_mime_type
+# now that the installation of the connector is complete, handle any
+# post-install tasks that might have been included for the connector
+- block:
+  - name: Handle post-install connector actions
+    include: "../files/{{post_install_task.action}}-handler.yml static=no"
+    with_items: "{{post_install_tasks}}"
+    loop_control:
+      loop_var: post_install_task
+  become: true

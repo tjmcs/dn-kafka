@@ -9,7 +9,7 @@ bootstrap.servers={{(kfka_nodes | join(':9092,')) + ':9092'}}
 group.id={{group_id}}
 
 # the host and port that the RESTful API should listen on
-rest.host.name={{data_addr}}
+rest.host.name={{api_addr}}
 rest.port={{rest_port}}
 
 # The converters specify the format of data in Kafka and how to translate it

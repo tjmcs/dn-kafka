@@ -1,0 +1,10 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+---
+# Handle the installation of a configuration file from a template associated
+# with a connector that is being added to the system (as a post-installation
+# step in the process of adding a connector)
+- name: Install '{{post_install_task.dest}}' from template
+  template:
+    src: "{{post_install_task.src}}"
+    dest: "{{post_install_task.dest}}"
+    mode: "{{post_install_task.mode | default('0644')}}"

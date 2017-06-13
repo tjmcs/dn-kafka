@@ -8,12 +8,12 @@
     request_body_hash:
       name: "{{connector_name}}"
       config: "{{connector_config}}"
-  when: action == 'start'
+  when: action == 'create'
 - set_fact:
     request_body_hash: "{{connector_config}}"
   when: action == 'update'
 # if we're starting a new instance, then put together a POST command to do so
-- name: Start new {{connector_name}} connector instance
+- name: Create new {{connector_name}} connector instance
   uri:
     headers:
       Content-Type: "application/json"
@@ -24,7 +24,7 @@
     return_content: yes
   register: returned_content
   run_once: true
-  when: action == 'start'
+  when: action == 'create'
 # if we're restarting an existing instance, then put together a POST command
 # to do so
 - name: Restart (running) {{connector_name}} connector instance
@@ -74,7 +74,7 @@
   when: action == 'resume'
 # if we're resuming an existing connector instance, then put together a PUT
 # command to do so
-- name: Remove (existing) {{connector_name}} connector instance from worker
+- name: Delete (existing) {{connector_name}} connector instance from worker
   uri:
     method: DELETE
     url: "{{connector_worker_url}}/{{connector_name}}"
@@ -82,4 +82,4 @@
     return_content: yes
   register: returned_content
   run_once: true
-  when: action == 'remove'
+  when: action == 'delete'

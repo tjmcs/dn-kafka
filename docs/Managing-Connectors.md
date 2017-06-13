@@ -196,14 +196,14 @@ can be used to restart those same instances (first stopping them, then starting 
 
 Finally, in addition to adding new connnectors to and managing worker instances running in the connector framework on the target nodes of an `ansible-playbook` run, the playbook in this repository also supports management of the connector instances that are deployed to worker instances running in that framework. More specifically, the playbook in this repository supports the following `action` values in the defined `action_hash`:
 
-* **`start`**: starts a new (named) instance of a given connector on one of the workers in the connector framework
+* **`create`**: creates a new (named) instance of a given connector on one of the workers in the connector framework
 * **`restart`**: restarts a running (named) instance of a connector running on one of the workers in the connector framework
 * **`update`**: updates the configuration of an existing (named) instance of a connector running on one of the workers in the connector framework
 * **`pause`**: pauses an existing (named) instance of a connector running on one of the workers in the connector framework; this action is useful when the underlying system that the connector communicates with must be taken down for maintenance, for example
 * **`resume`**: resumes an existing (named, paused) instance of a connector running on one of the workers in the connector framework
-* **`remove`**: removes an existing (named) instance of a connector from one of the workers in the connector framework
+* **`delete`**: deletes an existing (named) instance of a connector from one of the workers in the connector framework
 
-Each of these actions relies on a `name` that must be defined as part of the `action_hash` that is passed into the playbook run (along with one of the `action` values described above). In addition, when starting a new instance of a given connector or updating the configuration of that connector, a `config` hash map must be provided. The details of that `config` hash map will vary greatly depending on the connector type and the specific implementation that is being used. For example, when starting a new instance of the `kafka-connect-solr` instance available provided by [jcustenborder](https://github.com/jcustenborder/kafka-connect-solr), a local variables file that looks something like this would be used:
+Each of these actions relies on a `name` that must be defined as part of the `action_hash` that is passed into the playbook run (along with one of the `action` values described above). In addition, when creating a new instance of a given connector or updating the configuration of that connector, a `config` hash map must be provided. The details of that `config` hash map will vary greatly depending on the connector type and the specific implementation that is being used. For example, when creating a new instance of the `kafka-connect-solr` instance available provided by [jcustenborder](https://github.com/jcustenborder/kafka-connect-solr), a local variables file that looks something like this would be used:
 
 ```bash
 cat local-vars-start-connectors.yml
@@ -211,7 +211,7 @@ cat local-vars-start-connectors.yml
 data_iface: eth0
 api_iface: eth1
 action_hash:
-  action: start
+  action: create
   worker_port: 8083
   connectors:
     - name: solrcloud-metrics
@@ -236,7 +236,7 @@ action_hash:
         "solr.ignore.unknown.fields": false
 ```
 
-As was the case when adding new connectors to the nodes, the `action_hash` used when creating new instance of a given connector type relies on an `action` (which was given a value of `start` in this example) and an array of `connectors`, each of which contains a `name` to use when creating the connector instance and a `config` containing the configuration values required for that connector type. Other than the `connector.class` field that is shown, above, everything else in that `config` hash is implementation specific and the values that are supported and/or required will vary from one connector implementation to another (even for connectors that are intended to talk wtih the same sort of subsystem, a Solr server for example).
+As was the case when adding new connectors to the nodes, the `action_hash` used when creating new instance of a given connector type relies on an `action` (which was given a value of `create` in this example) and an array of `connectors`, each of which contains a `name` to use when creating the connector instance and a `config` containing the configuration values required for that connector type. Other than the `connector.class` field that is shown, above, everything else in that `config` hash is implementation specific and the values that are supported and/or required will vary from one connector implementation to another (even for connectors that are intended to talk wtih the same sort of subsystem, a Solr server for example).
 
 The parameters in each of the `connectors` entries will be used to construct the POST request that will be used to create the named connector instance. It should be noted here that since the RESTful API provided by the workers running in the connector framework must already be up and running for this POST request to succeed, we are assuming in this example that worker is already running in the the connector framework on the target nodes. If the worker is not already running in the connector framework, then any attempt to create new connector instances will fail.
 
@@ -273,7 +273,7 @@ action_hash:
         "solr.ignore.unknown.fields": false
 ```
 
-The remaining actions (restarting, pausing, resuming, and removing named connector instances) are much simpler since they only require that the name of the connector be specified in the `connectors` list; for example this local variables file can be used to pause the two connector instances shown above:
+The remaining actions (restarting, pausing, resuming, and deleting named connector instances) are much simpler since they only require that the name of the connector be specified in the `connectors` list; for example this local variables file can be used to pause the two connector instances shown above:
 
 ```bash
 cat local-vars-pause-connectors.yml
@@ -288,4 +288,4 @@ action_hash:
     - name: solrcloud-logs
 ```
 
-resuming, restarting, or removing these same instances would only require that the `action` shown above be modified (to `resume`, `restart`, or `remove`, respectively).
+resuming, restarting, or removing these same instances would only require that the `action` shown above be modified (to `resume`, `restart`, or `delete`, respectively).

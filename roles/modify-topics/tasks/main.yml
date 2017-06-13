@@ -29,14 +29,11 @@
     run_once: true
   # Next, pick one of our Zookeeper nodes to use for the commands we'll be running
   - set_fact:
-      rand_zk_node: "{{zk_nodes | random}}"
-    when: zk_nodes is defined and zk_nodes != []
-  - set_fact:
-      zk_node: "{{rand_zk_node | default('localhost')}}"
+      zk_node_str: "{{(zk_nodes | default(['localhost'])) | join(':2181,')}}:2181"
   # If we're creating a new set of topics, then just run the appropriate command on one of
   # the nodes in our Kafka cluster
   - name: Adding topics to the cluster
-    shell: "{{kafka_topics_cmd}} --create --zookeeper={{zk_node}}:2181 --replication-factor={{action_hash.repl_factor | default(1)}} --partitions={{action_hash.partitions | default(1)}} --topic={{item}}"
+    shell: "{{kafka_topics_cmd}} --create --zookeeper={{zk_node_str}} --replication-factor={{action_hash.repl_factor | default(1)}} --partitions={{action_hash.partitions | default(1)}} --topic={{item}}"
     with_items: "{{action_hash.topic_list | default([])}}"
     when: action_hash.action == 'create'
     run_once: true
@@ -45,7 +42,7 @@
     # First, mark the topic for deletion by running the appropriate command on one of
     # the nodes in our Kafka cluster
     - name: Remove topics from the Kafka cluster
-      shell: "{{kafka_topics_cmd}} --delete --zookeeper={{zk_node}}:2181 --topic={{item}}"
+      shell: "{{kafka_topics_cmd}} --delete --zookeeper={{zk_node_str}} --topic={{item}}"
       register: command_result
       failed_when:
         - ('Topic ' + item + ' does not exist') not in command_result.stderr
@@ -72,7 +69,7 @@
     # (this should ensure it disappears from such instances; without this step it seems
     # to come back in a "marked for deletion" state if the topic is created again later)
     - name: For Apache Kafka instances/clusters, remove topics again
-      shell: "{{kafka_topics_cmd}} --delete --zookeeper={{zk_node}}:2181 --topic={{item}}"
+      shell: "{{kafka_topics_cmd}} --delete --zookeeper={{zk_node_str}} --topic={{item}}"
       register: command_result
       failed_when:
         - ('Topic ' + item + ' does not exist') not in command_result.stderr

@@ -41,7 +41,7 @@
   vars:
     - combined_package_list: "{{ (default_packages|default([])) | union(kafka_package_list) | union((install_packages_by_tag|default({})).kafka|default([])) }}"
     - kafka_nodes: "{{groups['kafka']}}"
-    - zookeeper_nodes: "{{groups['zookeeper']}}"
+    - zookeeper_nodes: "{{groups['zookeeper'] | default([])}}"
   pre_tasks:
     # first, initialize the play by loading any `local_vars_file` that may have
     # been passed in, restarting the network on the target nodes (if desired),

@@ -1,43 +1,27 @@
 # (c) 2016 DataNexus Inc.  All Rights Reserved
 ---
-# First, setup a couple of facts so that can test whether or not a local Confluent
-# repository link was provided and we also know if we're installing Confluent
-# from a local directory on the Ansible node (or not)
+# First, setup a few facts that can be used to test whether or not an RPM
+# bundle file (either as a local file on the Ansible host or as a URL) was
+# provided as one of the input parameters for the playbook run
+#
+# Note that the `kafka_url` variable is always defined, with a default value
+# (from the `vars/kafka.yml` file) that downloads the Apache Kafka distribution
+# from the main Apache download site, but the file at that URL is obviously not
+# suitable for use when deploying the Confluent Kafka distribution (as we are
+# doing here), so we only install from a URL when we aren't installing from a
+# file and the URL provided is not the default (Apache Kafka) URL
 - set_fact:
-    install_from_dir: "{{not(local_kafka_file is undefined or local_kafka_file is none or local_kafka_file | trim == '')}}"
+    install_from_file: "{{not(local_kafka_file is undefined or local_kafka_file is none or local_kafka_file | trim == '')}}"
+    url_is_default: "{{kafka_url == default_apache_url}}"
 - set_fact:
-    install_from_url: "{{not(kafka_url is undefined or kafka_url is none or kafka_url | trim == '')}}"
-  when: not(install_from_dir)
-# if we're not installing confluent from a local directory or an RPM bundle
-# (passed in via the 'kafka_url' parameter), then we should prepare to install
-# Kafka from the standrad Confluent repository, then installing the packages
-# needed from that repository
-- block:
-  - name: "Add the confluent RPM key to our list of trusted RPM keys"
-    rpm_key:
-      key: https://packages.confluent.io/rpm/3.1/archive.key
-      state: present
-      validate_certs: no
-    environment: "{{environment_vars}}"
-  - name: Create a confluent yum repository file
-    template:
-      src: ../templates/confluent-repo.j2
-      dest: /etc/yum.repos.d/confluent.repo
-      mode: 0644
-  - name: Install confluent from repository
-    yum:
-      name: "{{confluent_package_name}}"
-      state: present
-    environment: "{{environment_vars}}"
-  become: true
-  when: not(install_from_dir) and (install_from_url is undefined or not(install_from_url))
-# otherwise, if we're installing from a bundled set of URLs that will be
-# downloaded from a URL or we're installing from a set of RPM files in a local
-# directory on the Ansible node that we're running this playbook from; in the
-# first case we need to download and unpack the bundled RPM files into a '/tmp'
-# directory, while in the second we need to copy over the files from that
-# directory to a '/tmp' directory; in both cases we then need to install the
-# Confluent packages from that directory locally
+    install_from_url: "{{not(install_from_file) and not(url_is_default)}}"
+# If we're installing from a bundled set of RPMs that will be downloaded from a
+# URL or we're installing from a set of RPM files in a local directory on the
+# Ansible node that we're running this playbook from; in the first case we need
+# to download and unpack the bundled RPM files into a '/tmp' directory, while
+# in the second we need to copy over the files from that directory to a '/tmp'
+# directory; in both cases we then need to install the Confluent packages from
+# that directory locally
 - block:
   - name: Download the RPM bundle to the /tmp directory
     get_url:
@@ -45,13 +29,13 @@
       dest: /tmp
       mode: 0644
       validate_certs: no
-    environment: "{{environment_vars}}"
+    environment: "{{environment_vars | default({})}}"
   - set_fact:
       local_filename: "{{kafka_url | basename}}"
   become: true
-  when: install_from_url is defined and install_from_url
+  when: install_from_url
 - block:
-  - name: Copy confluent files from a local directory to /tmp
+  - name: Copy confluent files from a local RPM bundle file to /tmp
     copy:
       src: "{{local_kafka_file}}"
       dest: "/tmp"
@@ -59,7 +43,7 @@
   - set_fact:
       local_filename: "{{local_kafka_file | basename}}"
   become: true
-  when: install_from_dir
+  when: install_from_file
 - block:
   - name: Unpack kafka distribution into directory in /tmp
     unarchive:
@@ -75,12 +59,41 @@
       paths: "/tmp/{{archive_dirname}}"
       patterns: "*.rpm"
     register: rpm_list
+  - set_fact:
+      rpm_file_list: "{{(rpm_list.files | map(attribute='path') | list | join(','))}}"
+  - set_fact:
+      bundle_includes_rpms: "{{rpm_file_list != ''}}"
   - name: Install all of the packages copied over
     yum:
-      name: "{{rpm_list.files | map(attribute='path') | list | join(',')}}"
+      name: "{{rpm_file_list}}"
       state: present
+    when: bundle_includes_rpms
   become: true
-  when: install_from_dir or (install_from_url is defined and install_from_url)
+  when: install_from_file or install_from_url
+# if we're not installing confluent from an RPM bundle file (either uploaded
+# from the Ansible host using the `local_kafka_file` or downloaded from the
+# `kafka_url`), or if a bundle file was uploaded/downloaded but contained no
+# RPM files, then we should install Kafka from the standrad Confluent
+# repository instead
+- block:
+  - name: "Add the confluent RPM key to our list of trusted RPM keys"
+    rpm_key:
+      key: https://packages.confluent.io/rpm/3.1/archive.key
+      state: present
+      validate_certs: no
+    environment: "{{environment_vars | default({})}}"
+  - name: Create a confluent yum repository file
+    template:
+      src: ../templates/confluent-repo.j2
+      dest: /etc/yum.repos.d/confluent.repo
+      mode: 0644
+  - name: Install confluent from repository
+    yum:
+      name: "{{confluent_package_name}}"
+      state: present
+    environment: "{{environment_vars | default({})}}"
+  become: true
+  when: (not(install_from_file) and not(install_from_url)) or not(bundle_includes_rpms | default(false))
 # Now that we've installed the packages that we need, setup the appropriate `log`
 # directories for Kafka (and for Zookeeper in the case of a single-node deployment);
 # finally, finish by setting up some facts that we'll need later in our playbook
@@ -114,13 +127,13 @@
     path: "/tmp/{{archive_dirname}}"
     state: absent
   become: true
-  when: install_from_url is defined and install_from_url
+  when: install_from_url
 - name: Remove directory created in /tmp directory
   file:
     path: "/tmp/{{local_filename}}"
     state: absent
   become: true
-  when: install_from_dir or (install_from_url is defined and install_from_url)
+  when: install_from_file or install_from_url
 # finally, set values for kafka_bin_dir, kafka_config_dir, kafka_topics_cmd, and
 # schema_registry_config_dir
 - name: Set a few facts that are used later in the playbook

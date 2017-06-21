@@ -1,0 +1,434 @@
+#!/usr/bin/env ansible-playbook
+# (c) 2016 DataNexus Inc.  All Rights Reserved.
+#
+# overly broker-to-broker, client-to-broker encryption over top of an existing kafka cluster
+# https://www.confluent.io/blog/apache-kafka-security-authorization-authentication-encryption/
+---     
+- name: discovering all {{ application }} nodes
+  hosts: localhost
+  tasks:
+    - ec2_remote_facts:
+        region: "{{ ec2_region }}"
+        filters:
+          instance-state-name: running
+          "tag:Application": "{{ application }}"
+          "tag:Domain": "{{ domain }}"
+          "tag:Project": "{{ project }}"
+          "tag:Tenant": "{{ tenant }}"
+      register: kafka_instances
+      when:
+        - cloud == 'aws'
+
+    - name: building {{ application }} host group
+      add_host: hostname="{{ item }}" groupname="{{ application }}" ansible_ssh_private_key_file="{{ key_path }}/{{ cloud }}-{{ ec2_region }}-{{ project }}-{{ application }}-{{ domain }}-private-key.pem"
+      with_items: "{{ kafka_instances.instances|map(attribute='private_ip_address')|list }}"
+      when:
+        - kafka_instances.instances|length > 0
+    
+    - ec2_remote_facts:
+        region: "{{ ec2_region }}"
+        filters:
+          instance-state-name: running
+          "tag:Application": shaw
+          "tag:Domain": "{{ domain }}"
+          "tag:Project": "{{ project }}"
+          "tag:Tenant": "{{ tenant }}"
+      register: shaw_instances
+      when:
+        - cloud == 'aws'
+
+    - name: building shaw host group
+      add_host: hostname="{{ item }}" groupname=shaw ansible_ssh_private_key_file="{{ key_path }}/{{ cloud }}-{{ ec2_region }}-{{ project }}-shaw-{{ domain }}-private-key.pem"
+      with_items: "{{ shaw_instances.instances|map(attribute='private_ip_address')|list }}"
+      when:
+        - shaw_instances.instances|length > 0
+
+- name: install JCE packages for {{ application }} encryption
+  hosts: "{{ application }}"
+  vars_files:
+      - vars/{{ application }}.yml
+      - "{{ tenant_config_path }}/config/site.yml"
+  gather_facts: yes
+  roles:
+    - { role: install-packages, package_list: ['epel-release-7-9'], when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat' }
+
+- name: install JCE packages for shaw encryption
+  hosts: shaw
+  vars_files:
+      - vars/{{ application }}.yml
+      - "{{ tenant_config_path }}/config/site.yml"
+  gather_facts: yes
+  roles:
+    - { role: install-packages, package_list: ['epel-release-7-9', 'java-1.8.0-openjdk', 'java-1.8.0-openjdk-devel'], when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat' }
+
+- name: creating {{ application }} keystores and truststores
+  hosts: shaw
+  vars_files:
+      - vars/{{ application }}.yml
+      - "{{ tenant_config_path }}/config/site.yml"
+  gather_facts: yes
+  tasks:
+    - block:
+      - name: checking existing server keystore
+        stat:
+          path: "/etc/tls/{{ tenant }}/{{ application }}"
+        register: kafka_server_key
+
+      - name: ensure TLS kafka directory is present
+        file:
+          path: /etc/tls/{{ tenant }}/{{ application }}
+          state: directory
+          mode: 0700
+        when: not kafka_server_key.stat.exists
+      
+      - name: generating server SSL key and cert into temporary broker keystore
+        command: /usr/bin/keytool -keystore /etc/tls/{{ tenant }}/{{ application }}/kafka.server.keystore.jks -alias localhost -validity {{ duration }} -genkey -keyalg RSA -storepass {{ storepass }} -keypass {{ keypass }} -dname "CN={{ certs.CN }}, OU={{ certs.OU }}, O={{ certs.O }}, L={{ certs.L }}, C={{ certs.C }}" 
+        # when: not kafka_server_key.stat.exists
+
+      # - name: checking existing CA key
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/ca-key"
+      #   register: kafka_server_cakey
+      #
+      # - name: checking existing CA cert
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/ca-cert"
+      #   register: kafka_server_cacrt
+
+      - name: generating CA private key and self-signed certificate
+        command: /usr/bin/openssl req -new -x509 -keyout /etc/tls/{{ tenant }}/{{ application }}/ca-key -out /etc/tls/{{ tenant }}/{{ application }}/ca-cert -days {{ duration }} -passout pass:{{ keypass }} -subj "/CN={{ application }}.localdomain/OU={{ certs.OU }}/O={{ certs.O }}/L={{ certs.L }}/C={{ certs.C }}"
+        # when: not kafka_server_cakey.stat.exists and not kafka_server_cacrt.stat.exists
+
+      
+        
+      # - name: checking existing CA key
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/ca-key"
+      #   register: kafka_server_cakey
+      #
+      # - name: checking existing CA cert
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/ca-cert"
+      #   register: kafka_server_cacrt
+      #
+      # - name: checking existing server truststore
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/kafka.server.truststore.jks"
+      #   register: kafka_server_trust
+
+      # - find:
+     #      paths: /etc/tls/datanexus/kafka
+     #      patterns: "ca-certs*"
+     #    register: find_all_ca_certs
+        
+      - name: importing CA certificate into server truststore
+        command: /usr/bin/keytool -keystore /etc/tls/{{ tenant }}/{{ application }}/kafka.server.truststore.jks -alias CARoot -import -file /etc/tls/{{ tenant }}/{{ application }}/ca-cert -storepass {{ storepass }} -keypass {{ keypass }} -noprompt
+        # when: not kafka_server_trust.stat.exists
+      
+      # - name: checking existing client truststore
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/kafka.client.truststore.jks"
+      #   register: kafka_client_trust
+      
+      - name: importing CA certificate into client truststore
+        command: /usr/bin/keytool -keystore /etc/tls/{{ tenant }}/{{ application }}/kafka.client.truststore.jks -alias CARoot -import -file /etc/tls/{{ tenant }}/{{ application }}/ca-cert -storepass {{ storepass }} -keypass {{ keypass }} -noprompt
+        # when: not kafka_client_trust.stat.exists
+      
+      # - name: checking existing certificate request
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/cert-file"
+      #   register: kafka_server_cert_request
+      
+      - name: exporting unsigned server certificate from broker keystore
+        command: /usr/bin/keytool -keystore /etc/tls/{{ tenant }}/{{ application }}/kafka.server.keystore.jks -alias localhost -certreq -file /etc/tls/{{ tenant }}/{{ application }}/cert-file -storepass {{ storepass }}
+        # when: not kafka_server_cert_request.stat.exists
+    
+      # - name: checking existing certificate request
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/cert-file"
+      #   register: kafka_server_cert_request
+      
+      - name: signing server certificate with CA private key
+        command: /usr/bin/openssl x509 -req -CA /etc/tls/{{ tenant }}/{{ application }}/ca-cert -CAkey /etc/tls/{{ tenant }}/{{ application }}/ca-key -in /etc/tls/{{ tenant }}/{{ application }}/cert-file -out /etc/tls/{{ tenant }}/{{ application }}/cert-signed -days {{ duration }} -CAcreateserial -passin pass:{{ keypass }}
+        # when: kafka_server_cert_request.stat.exists
+    
+      # - name: checking existing certificate
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/ca-cert"
+      #   register: kafka_server_crt
+      
+      - name: importing CA certificate into broker keystore
+        command: /usr/bin/keytool -keystore /etc/tls/{{ tenant }}/{{ application }}/kafka.server.keystore.jks -alias CARoot -import -file /etc/tls/{{ tenant }}/{{ application }}/ca-cert -storepass {{ storepass }} -noprompt
+        # when: kafka_server_crt.stat.exists
+        
+      # - name: checking existing signed certificate
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/cert-signed"
+      #   register: kafka_server_sgn_crt
+      
+      - name: importing signed server certificate into broker keystore
+        command: /usr/bin/keytool -keystore /etc/tls/{{ tenant }}/{{ application }}/kafka.server.keystore.jks -alias localhost -import -file /etc/tls/{{ tenant }}/{{ application }}/cert-signed -storepass {{ storepass }} -noprompt
+        # when: kafka_server_sgn_crt.stat.exists
+ 
+      - name: removing CA serial number
+        file:
+          path: /etc/tls/{{ tenant }}/{{ application }}/ca-cert.srl
+          state: absent
+     
+      - name: removing unsigned server certificate
+        file:
+          path: /etc/tls/{{ tenant }}/{{ application }}/cert-file
+          state: absent
+
+      - name: removing signed server certificate
+        file:
+          path: /etc/tls/{{ tenant }}/{{ application }}/cert-signed
+          state: absent
+          
+      become: true 
+    
+    # client keystore configuration
+    
+    - block:
+      # - name: checking existing certificate request
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/kafka.client.keystore.jks"
+      #   register: kafka_client_key
+      
+      - name: generating client SSL key and cert into client keystore      
+        command: /usr/bin/keytool -keystore /etc/tls/{{ tenant }}/{{ application }}/kafka.client.keystore.jks -alias localhost -validity {{ duration }} -genkey -keyalg RSA -storepass {{ storepass }} -dname "CN={{ certs.CN }}, OU={{ certs.OU }}, O={{ certs.O }}, L={{ certs.L }}, C={{ certs.C }}"
+        # when: not kafka_client_key.stat.exists
+
+      - name: exporting unsigned client certificate from client keystore
+        command: /usr/bin/keytool -keystore /etc/tls/{{ tenant }}/{{ application }}/kafka.client.keystore.jks -alias localhost -certreq -file /etc/tls/{{ tenant }}/{{ application }}/cert-file -storepass {{ storepass }}
+
+      # - name: checking existing certificate request
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/cert-file"
+      #   register: kafka_client_cert_request
+
+      - name: signing client certificate with CA private key
+        command: /usr/bin/openssl x509 -req -CA /etc/tls/{{ tenant }}/{{ application }}/ca-cert -CAkey /etc/tls/{{ tenant }}/{{ application }}/ca-key -in /etc/tls/{{ tenant }}/{{ application }}/cert-file -out /etc/tls/{{ tenant }}/{{ application }}/cert-signed -days {{ duration }} -CAcreateserial -passin pass:{{ keypass }}
+        # when: kafka_client_cert_request.stat.exists
+        
+      # - name: checking existing certificate
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/ca-cert"
+      #   register: kafka_client_crt
+
+      - name: importing CA certifcate into client keystore
+        command: /usr/bin/keytool -keystore /etc/tls/{{ tenant }}/{{ application }}/kafka.client.keystore.jks -alias CARoot -import -file /etc/tls/{{ tenant }}/{{ application }}/ca-cert -storepass {{ storepass }} -noprompt
+        # when: kafka_client_crt.stat.exists
+
+      # - name: checking existing signed certificate
+      #   stat:
+      #     path: "/etc/tls/{{ tenant }}/{{ application }}/cert-signed"
+      #   register: kafka_client_sgn_crt
+
+      - name: importing signed certifcate into client keystore
+        command: /usr/bin/keytool -keystore /etc/tls/{{ tenant }}/{{ application }}/kafka.client.keystore.jks -alias localhost -import -file /etc/tls/{{ tenant }}/{{ application }}/cert-signed -storepass {{ storepass }} -noprompt
+        # when: kafka_client_sgn_crt.stat.exists
+      
+      # - name: cleaning /etc/tls/{{ tenant }}/{{ application }}/ca-cert
+      #   file:
+      #     path: /etc/tls/{{ tenant }}/{{ application }}/ca-cert
+      #     state: absent
+      #   become_user: "{{ application }}"
+      #
+         
+      - name: removing CA serial number
+        file:
+          path: /etc/tls/{{ tenant }}/{{ application }}/ca-cert.srl
+          state: absent
+     
+      - name: removing unsigned server certificate
+        file:
+          path: /etc/tls/{{ tenant }}/{{ application }}/cert-file
+          state: absent
+
+      - name: removing signed server certificate
+        file:
+          path: /etc/tls/{{ tenant }}/{{ application }}/cert-signed
+          state: absent
+      
+      - name: removing CA certificate
+        file:
+          path: /etc/tls/{{ tenant }}/{{ application }}/ca-cert
+          state: absent
+      
+      - name: fetching kafka broker keystore
+        fetch:
+          src: /etc/tls/datanexus/kafka/kafka.server.keystore.jks
+          dest: "{{ key_path }}/kafka.server.keystore.jks"
+          flat: yes
+
+      - name: fetching kafka broker truststore
+        fetch:
+          src: /etc/tls/datanexus/kafka/kafka.server.truststore.jks
+          dest: "{{ key_path }}/kafka.server.truststore.jks"
+          flat: yes
+
+      - name: fetching kafka client keystore
+        fetch:
+          src: /etc/tls/datanexus/kafka/kafka.client.keystore.jks
+          dest: "{{ key_path }}/kafka.client.keystore.jks"
+          flat: yes
+
+      - name: fetching kafka client truststore
+        fetch:
+          src: /etc/tls/datanexus/kafka/kafka.client.truststore.jks
+          dest: "{{ key_path }}/kafka.client.truststore.jks"
+          flat: yes
+      become: true
+
+    
+- name: configuring {{ application }} encryption
+  hosts: "{{ application }}"
+  vars_files:
+      - vars/{{ application }}.yml
+      - "{{ tenant_config_path }}/config/site.yml"
+  gather_facts: yes
+  tasks:
+    - name: setting eth0 to all interfaces
+      set_fact:
+        kafka_interface: "{{ hostvars[inventory_hostname].ansible_eth0.device }}"
+        kakfa_interface_ipv4: "{{ hostvars[inventory_hostname].ansible_eth0.ipv4.address }}"
+      when: hostvars[inventory_hostname].ansible_eth0 is defined
+
+    - name: setting eth1 to kafka public internal
+      set_fact:
+        kafka_interface: "{{ hostvars[inventory_hostname].ansible_eth1.device }}"
+        kafka_interface_ipv4: "{{ hostvars[inventory_hostname].ansible_eth1.ipv4.address }}"
+      when: hostvars[inventory_hostname].ansible_eth1 is defined
+
+    - block:
+      - name: checking existing server keystore
+        stat:
+          path: "/etc/tls/{{ tenant }}/{{ application }}"
+        register: kafka_server_key
+      
+      - name: ensure TLS kafka directory is present
+        file:
+          path: /etc/tls/{{ tenant }}/{{ application }}
+          state: directory
+          mode: 0700
+          owner: "{{ application }}"
+          group: "{{ application }}"
+        when: not kafka_server_key.stat.exists
+
+      - name: distributing certificates to all cluster nodes
+        copy:
+          src:  "{{ item }}"
+          dest: /etc/tls/datanexus/kafka/
+          owner: "{{ application }}"
+          group: "{{ application }}"
+          mode: 0600
+        with_items:
+          - "{{ key_path }}/kafka.server.keystore.jks"
+          - "{{ key_path }}/kafka.server.truststore.jks"
+          - "{{ key_path }}/kafka.client.keystore.jks"
+          - "{{ key_path }}/kafka.client.truststore.jks"
+      
+      - name: configuring SSL listeners
+        replace:
+          path: /etc/kafka/server.properties
+          regexp: '^listeners=PLAINTEXT://{{ kafka_interface_ipv4 }}:9092$'
+          # replace: "listeners=SSL://{{ kafka_interface_ipv4 }}:9093,SASL_SSL://{{ kafka_interface_ipv4 }}:9094"
+          replace: "listeners=SSL://{{ kafka_interface_ipv4 }}:9093"
+
+      - name: defaulting adverised listens to SSL
+        replace:
+          path: /etc/kafka/server.properties
+          regexp: '^advertised.listeners=PLAINTEXT://{{ kafka_interface_ipv4 }}:9092$'
+          replace: "#advertised.listeners=PLAINTEXT://{{ kafka_interface_ipv4 }}:9092"
+
+      - name: enabling SSL for internode communication
+        blockinfile:
+          path: /etc/kafka/server.properties
+          insertafter: EOF
+          state: present
+          block: |
+            security.inter.broker.protocol=SSL
+            ssl.protocol=TLSv1
+            ssl.client.auth=required
+            ssl.keystore.location=/etc/tls/{{ tenant }}/{{ application }}/kafka.server.keystore.jks
+            ssl.keystore.password={{ storepass }}
+            ssl.key.password={{ keypass }}
+            ssl.truststore.location=/etc/tls/{{ tenant }}/{{ application }}/kafka.server.truststore.jks
+            ssl.truststore.password={{ storepass }}
+            ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1
+            ssl.keystore.type=JKS
+            ssl.keystore.type=JKS
+
+      - name: protecting kafka config
+        file:
+          path: /etc/kafka/server.properties
+          state: file
+          owner: "{{ application }}"
+          group: "{{ application }}"
+          mode: 0600
+
+      - name: restart kafka
+        systemd: "name=kafka.service state=restarted daemon_reload=yes"
+      become: true
+
+- name: removing unused downloaded files
+  hosts: localhost
+  tasks:
+    - name: removing {{ key_path }}/kafka.server.keystore.jks
+      file:
+        path: "{{ key_path }}/kafka.server.keystore.jks"
+        state: absent
+    
+    - name: removing {{ key_path }}/kafka.server.truststore.jks
+      file:
+        path: "{{ key_path }}/kafka.server.truststore.jks"
+        state: absent
+        
+- name: creating client configurations
+  hosts: "{{ application }}"
+  vars_files:
+      - vars/{{ application }}.yml
+      - "{{ tenant_config_path }}/config/site.yml"
+  gather_facts: yes
+  tags:
+      - client
+  tasks:
+    - block:
+      - name: enabling SSL for producers
+        blockinfile:
+          create: yes
+          mode: 0600
+          owner: "{{ application }}"
+          group: "{{ application }}"
+          path: /etc/kafka/producer_ssl.properties
+          insertafter: EOF
+          state: present
+          block: |
+            bootstrap.servers={{ kafka_interface_ipv4 }}:9093
+            security.protocol=SSL
+            ssl.truststore.location=/etc/tls/{{ tenant }}/{{ application }}/kafka.client.truststore.jks
+            ssl.truststore.password={{ storepass }}
+            ssl.keystore.location=/etc/tls/{{ tenant }}/{{ application }}/kafka.client.keystore.jks
+            ssl.keystore.password={{ storepass }}
+            ssl.key.password={{ keypass }}
+
+      - name: enabling SSL for consumers
+        blockinfile:
+          create: yes
+          mode: 0600
+          owner: "{{ application }}"
+          group: "{{ application }}"
+          path: /etc/kafka/consumer_ssl.properties
+          insertafter: EOF
+          state: present
+          block: |
+            bootstrap.servers={{ kafka_interface_ipv4 }}:9093
+            security.protocol=SSL
+            ssl.truststore.location=/etc/tls/{{ tenant }}/{{ application }}/kafka.client.truststore.jks
+            ssl.truststore.password={{ storepass }}
+            ssl.keystore.location=/etc/tls/{{ tenant }}/{{ application }}/kafka.client.keystore.jks
+            ssl.keystore.password={{ storepass }}
+            ssl.key.password={{ keypass }}
+      become: true
+ 

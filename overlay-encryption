@@ -52,15 +52,6 @@
   roles:
     - { role: install-packages, package_list: ['epel-release-7-9'], when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat' }
 
-- name: install JCE packages for shaw encryption
-  hosts: shaw
-  vars_files:
-      - vars/{{ application }}.yml
-      - "{{ tenant_config_path }}/config/site.yml"
-  gather_facts: yes
-  roles:
-    - { role: install-packages, package_list: ['epel-release-7-9', 'java-1.8.0-openjdk', 'java-1.8.0-openjdk-devel'], when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat' }
-
 - name: creating {{ application }} keystores and truststores
   hosts: shaw
   vars_files:

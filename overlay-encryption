@@ -1,7 +1,7 @@
 #!/usr/bin/env ansible-playbook
 # (c) 2016 DataNexus Inc.  All Rights Reserved.
 #
-# overly broker-to-broker, client-to-broker encryption over top of an existing kafka cluster
+# overlay broker-to-broker, client-to-broker encryption over top of an existing kafka cluster
 # https://www.confluent.io/blog/apache-kafka-security-authorization-authentication-encryption/
 ---     
 - name: discovering all {{ application }} nodes
@@ -267,20 +267,7 @@
           src: /etc/tls/datanexus/kafka/kafka.server.truststore.jks
           dest: "{{ key_path }}/kafka.server.truststore.jks"
           flat: yes
-
-      - name: fetching kafka client keystore
-        fetch:
-          src: /etc/tls/datanexus/kafka/kafka.client.keystore.jks
-          dest: "{{ key_path }}/kafka.client.keystore.jks"
-          flat: yes
-
-      - name: fetching kafka client truststore
-        fetch:
-          src: /etc/tls/datanexus/kafka/kafka.client.truststore.jks
-          dest: "{{ key_path }}/kafka.client.truststore.jks"
-          flat: yes
-      become: true
-
+      become: true 
     
 - name: configuring {{ application }} encryption
   hosts: "{{ application }}"
@@ -326,8 +313,6 @@
         with_items:
           - "{{ key_path }}/kafka.server.keystore.jks"
           - "{{ key_path }}/kafka.server.truststore.jks"
-          - "{{ key_path }}/kafka.client.keystore.jks"
-          - "{{ key_path }}/kafka.client.truststore.jks"
       
       - name: configuring SSL listeners
         replace:
@@ -384,51 +369,3 @@
       file:
         path: "{{ key_path }}/kafka.server.truststore.jks"
         state: absent
-        
-- name: creating client configurations
-  hosts: "{{ application }}"
-  vars_files:
-      - vars/{{ application }}.yml
-      - "{{ tenant_config_path }}/config/site.yml"
-  gather_facts: yes
-  tags:
-      - client
-  tasks:
-    - block:
-      - name: enabling SSL for producers
-        blockinfile:
-          create: yes
-          mode: 0600
-          owner: "{{ application }}"
-          group: "{{ application }}"
-          path: /etc/kafka/producer_ssl.properties
-          insertafter: EOF
-          state: present
-          block: |
-            bootstrap.servers={{ kafka_interface_ipv4 }}:9093
-            security.protocol=SSL
-            ssl.truststore.location=/etc/tls/{{ tenant }}/{{ application }}/kafka.client.truststore.jks
-            ssl.truststore.password={{ storepass }}
-            ssl.keystore.location=/etc/tls/{{ tenant }}/{{ application }}/kafka.client.keystore.jks
-            ssl.keystore.password={{ storepass }}
-            ssl.key.password={{ keypass }}
-
-      - name: enabling SSL for consumers
-        blockinfile:
-          create: yes
-          mode: 0600
-          owner: "{{ application }}"
-          group: "{{ application }}"
-          path: /etc/kafka/consumer_ssl.properties
-          insertafter: EOF
-          state: present
-          block: |
-            bootstrap.servers={{ kafka_interface_ipv4 }}:9093
-            security.protocol=SSL
-            ssl.truststore.location=/etc/tls/{{ tenant }}/{{ application }}/kafka.client.truststore.jks
-            ssl.truststore.password={{ storepass }}
-            ssl.keystore.location=/etc/tls/{{ tenant }}/{{ application }}/kafka.client.keystore.jks
-            ssl.keystore.password={{ storepass }}
-            ssl.key.password={{ keypass }}
-      become: true
- 

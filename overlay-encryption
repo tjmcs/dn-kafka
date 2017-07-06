@@ -249,13 +249,13 @@
       
       - name: fetching kafka broker keystore
         fetch:
-          src: /etc/tls/datanexus/kafka/kafka.server.keystore.jks
+          src: /etc/tls/{{ tenant }}/{{ application }}/kafka.server.keystore.jks
           dest: "{{ key_path }}/kafka.server.keystore.jks"
           flat: yes
 
       - name: fetching kafka broker truststore
         fetch:
-          src: /etc/tls/datanexus/kafka/kafka.server.truststore.jks
+          src: /etc/tls/{{ tenant }}/{{ application }}/kafka.server.truststore.jks
           dest: "{{ key_path }}/kafka.server.truststore.jks"
           flat: yes
       become: true 
@@ -297,7 +297,7 @@
       - name: distributing certificates to all cluster nodes
         copy:
           src:  "{{ item }}"
-          dest: /etc/tls/datanexus/kafka/
+          dest: "/etc/tls/{{ tenant }}/{{ application }}/"
           owner: "{{ application }}"
           group: "{{ application }}"
           mode: 0600

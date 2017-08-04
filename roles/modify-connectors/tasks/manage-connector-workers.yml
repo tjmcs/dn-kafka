@@ -45,7 +45,7 @@
       - "'already exists' not in command_result.stdout"
       - "command_result.rc != 0"
     run_once: true
-    become_user: kafka
+    become_user: "{{kafka_user}}"
   become: true
   when: action == 'start-worker' and kafka_topics_out.rc == 0
 # if a worker is not running at the named URL and we've been asked to start
@@ -57,15 +57,15 @@
     file:
       path: "/etc/kafka-connectors"
       state: directory
-      owner: kafka
-      group: kafka
+      owner: "{{kafka_user}}"
+      group: "{{kafka_group}}"
       mode: 0755
   - name: Create {{worker_props_filename}} file
     template:
       src: worker.properties.j2
       dest: "/etc/kafka-connectors/{{worker_props_filename}}"
-      owner: kafka
-      group: kafka
+      owner: "{{kafka_user}}"
+      group: "{{kafka_group}}"
       mode: 0644
   # if additional configuration parameters were passed in, then set the corresponding
   # parameters in the worker properties file
@@ -117,7 +117,7 @@
   # the 'connect-distributed' command in 'daemon mode'
   - name: Start worker
     shell: "{{worker_cp_prefix}}connect-distributed -daemon /etc/kafka-connectors/{{worker_props_filename}}"
-    become_user: kafka
+    become_user: "{{kafka_user}}"
   become: true
   when:
     - "'Connection refused' in returned_content.msg"
@@ -150,6 +150,6 @@
     # and restart the daemon with the same worker properties used when it was created
     - name: Restart the daemon
       shell: "{{worker_cp_prefix}}connect-distributed -daemon /etc/kafka-connectors/{{worker_props_filename}}"
-      become_user: kafka
+      become_user: "{{kafka_user}}"
   become: true
   when: returned_content.status == 200 and action == 'restart-worker'

@@ -3,12 +3,12 @@
 - block:
   - name: Create kafka group
     group:
-      name: kafka
+      name: "{{kafka_user}}"
       system: yes
   - name: Create kafka user
     user:
-      name: kafka
-      group: kafka
+      name: "{{kafka_user}}"
+      group: "{{kafka_group}}"
       createhome: no
       system: yes
   become: true

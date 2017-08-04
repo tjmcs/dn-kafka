@@ -81,4 +81,4 @@
       when: kafka_distro == 'apache'
     when: action_hash.action == 'delete'
   become: true
-  become_user: kafka
+  become_user: "{{kafka_user}}"

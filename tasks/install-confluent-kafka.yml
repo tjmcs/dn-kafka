@@ -94,33 +94,6 @@
     environment: "{{environment_vars | default({})}}"
   become: true
   when: (not(install_from_file) and not(install_from_url)) or not(bundle_includes_rpms | default(false))
-# Now that we've installed the packages that we need, setup the appropriate `log`
-# directories for Kafka (and for Zookeeper in the case of a single-node deployment);
-# finally, finish by setting up some facts that we'll need later in our playbook
-- name: Set fact for the log directory location
-  set_fact: log_dir_location="{{kafka_data_dir | default('/var/lib')}}"
-- block:
-  - name: "Create {{log_dir_location}}/kafka directory"
-    become: true
-    file:
-      path: "{{log_dir_location}}/kafka"
-      state: directory
-      owner: kafka
-      group: kafka
-  - name: Create /var/log/kafka directory
-    file:
-      path: /var/log/kafka
-      state: directory
-      owner: kafka
-      group: kafka
-  - name: "Create {{log_dir_location}}/zookeeper directory"
-    file:
-      path: "{{log_dir_location}}/zookeeper"
-      state: directory
-      owner: kafka
-      group: kafka
-    when: (zk_nodes | default([])) == []
-  become: true
 # cleanup the temporary files created
 - name: Remove downloaded RPM bundle
   file:
@@ -134,11 +107,3 @@
     state: absent
   become: true
   when: install_from_file or install_from_url
-# finally, set values for kafka_bin_dir, kafka_config_dir, kafka_topics_cmd, and
-# schema_registry_config_dir
-- name: Set a few facts that are used later in the playbook
-  set_fact:
-    kafka_bin_dir: "/usr/bin"
-    kafka_config_dir: "/etc/kafka"
-    kafka_topics_cmd: "kafka-topics"
-    schema_registry_config_dir: "/etc/schema-registry"

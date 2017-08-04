@@ -1,0 +1,38 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved
+---
+# Setup the appropriate `log` directories for Kafka (and for Zookeeper in the
+# case of a single-node deployment)
+- name: Set fact for the log directory location
+  set_fact:
+    log_dir_location: "{{kafka_data_dir | default('/var/lib')}}"
+- block:
+  - name: "Create {{log_dir_location}}/kafka directory"
+    become: true
+    file:
+      path: "{{log_dir_location}}/kafka"
+      state: directory
+      owner: "{{kafka_user}}"
+      group: "{{kafka_group}}"
+  - name: Create /var/log/kafka directory
+    file:
+      path: /var/log/kafka
+      state: directory
+      owner: "{{kafka_user}}"
+      group: "{{kafka_group}}"
+  - name: "Create {{log_dir_location}}/zookeeper directory"
+    file:
+      path: "{{log_dir_location}}/zookeeper"
+      state: directory
+      owner: "{{kafka_user}}"
+      group: "{{kafka_group}}"
+    when: (zk_nodes | default([])) == []
+  become: true
+# then set values for the `kafka_bin_dir`, `kafka_config_dir`,
+# `kafka_topics_cmd`, and `schema_registry_config_dir` parameters (we'll use
+# them later in the playbook)
+- name: Set a few facts that are used later in the playbook
+  set_fact:
+    kafka_bin_dir: "/usr/bin"
+    kafka_config_dir: "/etc/kafka"
+    kafka_topics_cmd: "kafka-topics"
+    schema_registry_config_dir: "/etc/schema-registry"

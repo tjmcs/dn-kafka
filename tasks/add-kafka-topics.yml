@@ -9,7 +9,7 @@
 - name: Create kafka topics
   run_once: true
   become: true
-  become_user: kafka
+  become_user: "{{kafka_user}}"
   shell: "{{kafka_topics_cmd}} --create --zookeeper {{zk_node}}:2181 --replication-factor 1 --partitions 1 --topic {{ item }}"
   with_items: "{{ kafka_topics | default([]) }}"
   register: command_result

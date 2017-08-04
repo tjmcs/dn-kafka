@@ -29,5 +29,5 @@
       path: "{{kafka_data_dir}}/kafka/{{item}}"
       state: absent
     with_items: "{{topic_dirs}}"
-  become_user: kafka
+  become_user: "{{kafka_user}}"
   become: true
